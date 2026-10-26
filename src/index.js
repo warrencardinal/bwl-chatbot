@@ -24,7 +24,7 @@ export default {
 
     if (path === "/config" || path === "/session" || path === "/chat") {
       const origin = request.headers.get("Origin") || "";
-      const cors = corsHeaders(origin, url, env);
+      const cors = corsHeaders(origin, url, env, request.method);
       if (!cors) return new Response("Forbidden", { status: 403 });
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
 
@@ -52,7 +52,9 @@ export default {
 
 // ---------- CORS ----------
 
-function corsHeaders(origin, url, env) {
+function corsHeaders(origin, url, env, method) {
+  // Browsers omit Origin on same-origin GETs; /config is public, so allow it.
+  if (!origin) return method === "GET" ? {} : null;
   const allowed = (env.ALLOWED_ORIGINS || "")
     .split(",")
     .map((s) => s.trim())
