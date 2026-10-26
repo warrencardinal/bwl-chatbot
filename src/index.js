@@ -38,11 +38,13 @@ export default {
         const { success } = await env.CHAT_LIMITER.limit({ key: ip });
         if (!success) return json({ error: "Too many messages. Please wait a minute." }, 429, cors);
 
-        if (path === "/session") return handleSession(request, env, cors, ip);
-        return handleChat(request, env, cors);
+        if (path === "/session") return await handleSession(request, env, cors, ip);
+        return await handleChat(request, env, cors);
       } catch (err) {
         console.error(err);
-        return json({ error: "Something went wrong. Please call (210) 571-0400." }, 500, cors);
+        const body = { error: "Something went wrong. Please call (210) 571-0400." };
+        if (origin === url.origin) body.detail = String(err && err.message ? err.message : err).slice(0, 800);
+        return json(body, 500, cors);
       }
     }
 
@@ -157,6 +159,7 @@ async function handleChat(request, env, cors) {
   const sourcePage = typeof body.page === "string" ? body.page.slice(0, 500) : null;
   const convo = messages.map((m) => ({ role: m.role, content: m.content }));
   let leadSaved = false;
+  let lastText = "";
 
   // Up to 3 model turns: reply, or tool call -> result -> reply.
   for (let i = 0; i < 3; i++) {
@@ -164,8 +167,11 @@ async function handleChat(request, env, cors) {
     const toolUses = res.content.filter((c) => c.type === "tool_use");
     const text = res.content.filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
 
+    if (text) lastText = text;
+
     if (res.stop_reason !== "tool_use" || toolUses.length === 0) {
-      return json({ reply: text || "Sorry, I didn't catch that. Could you say it another way?", leadSaved }, 200, cors);
+      const fallback = leadSaved ? savedFallback(env) : "Sorry, I didn't catch that. Could you say it another way?";
+      return json({ reply: lastText || fallback, leadSaved }, 200, cors);
     }
 
     convo.push({ role: "assistant", content: res.content });
@@ -181,7 +187,14 @@ async function handleChat(request, env, cors) {
     convo.push({ role: "user", content: results });
   }
 
-  return json({ reply: "Thanks. Someone from the firm will be in touch.", leadSaved }, 200, cors);
+  return json({ reply: lastText || savedFallback(env), leadSaved }, 200, cors);
+}
+
+function savedFallback(env) {
+  const booking = (env.BOOKING_URL || "").trim();
+  return booking
+    ? `Thanks, you're all set. You can pick a consultation time here: ${booking}`
+    : "Thanks, you're all set. Someone from the firm will contact you to schedule a consultation.";
 }
 
 function cleanMessages(raw) {
