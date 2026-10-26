@@ -28,7 +28,7 @@
   "vars": {
     "ALLOWED_ORIGINS": "https://brandiwolfelaw.com,https://www.brandiwolfelaw.com",
     "BOOKING_URL": "",
-    "ALERT_FROM": "",
+    "ALERT_FROM": "alerts@brandiwolfe.com",
     "ALERT_TO": "",
     // Optional per-matter routing, e.g. {"estate_planning":"someone@brandiwolfelaw.com"}
     "ROUTES": "{}",
