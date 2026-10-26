@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bwl-chatbot",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-15",
+  "observability": { "enabled": true },
+
+  // widget.js and demo.html are served straight from /public
+  "assets": { "directory": "./public" },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bwl-chat-leads",
+      "database_id": "31fe865a-2912-4b51-b763-d65860f193d7",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Per-IP limit on /chat and /session
+  "ratelimits": [
+    { "name": "CHAT_LIMITER", "namespace_id": "2101", "simple": { "limit": 20, "period": 60 } }
+  ],
+
+  // Lead alerts. ALERT_FROM must be on a domain onboarded to Cloudflare Email Service.
+  "send_email": [{ "name": "EMAIL" }],
+
+  "vars": {
+    "ALLOWED_ORIGINS": "https://brandiwolfelaw.com,https://www.brandiwolfelaw.com",
+    "BOOKING_URL": "",
+    "ALERT_FROM": "",
+    "ALERT_TO": "",
+    // Optional per-matter routing, e.g. {"estate_planning":"someone@brandiwolfelaw.com"}
+    "ROUTES": "{}",
+    "MODEL": "claude-haiku-5-5",
+    "TURNSTILE_SITE_KEY": ""
+  }
+
+  // Secrets (set in Cloudflare dashboard, never in this file):
+  //   ANTHROPIC_API_KEY, SESSION_SECRET, ADMIN_PASSWORD, TURNSTILE_SECRET (only if TURNSTILE_SITE_KEY is set)
+}
