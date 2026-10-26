@@ -179,8 +179,13 @@ async function handleChat(request, env, cors) {
     for (const tu of toolUses) {
       let result = "Unknown tool.";
       if (tu.name === "save_lead") {
-        result = await saveLead(env, tu.input || {}, session.sid, sourcePage);
-        leadSaved = true;
+        try {
+          result = await saveLead(env, tu.input || {}, session.sid, sourcePage);
+          leadSaved = result.startsWith("Saved");
+        } catch (err) {
+          console.error("saveLead failed", err);
+          result = "Not saved because of a system error. Ask them to call (210) 571-0400 so the firm gets their details.";
+        }
       }
       results.push({ type: "tool_result", tool_use_id: tu.id, content: result });
     }
