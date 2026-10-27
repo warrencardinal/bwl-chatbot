@@ -75,6 +75,7 @@ async function runCase(env, c) {
   const messages = [];
   const transcript = [];
   const calls = [];
+  const notes = [];
   let savedMatter = null;
   let schedulerOpened = false;
 
@@ -99,11 +100,12 @@ async function runCase(env, c) {
     transcript.push({ who: "Visitor", text: turn });
     const out = await runBot(env, messages, true, handleTool);
     calls.push(...out.toolCalls);
+    notes.push(...(out.notes || []));
     messages.push({ role: "assistant", content: out.reply });
     transcript.push({ who: "Bot", text: out.reply });
   }
 
-  const fails = [];
+  const fails = [...new Set(notes)];
   const replies = transcript.filter((t) => t.who === "Bot").map((t) => t.text);
   if (replies.some((r) => DASH.test(r))) fails.push("Used an em dash");
   if (replies.some((r) => EMOJI.test(r))) fails.push("Used an emoji");

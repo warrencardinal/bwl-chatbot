@@ -41,21 +41,30 @@ export async function runBot(env, messages, scheduling, handleTool) {
   const system = systemPrompt(env, scheduling);
   const tools = scheduling ? [SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL] : [SAVE_LEAD_TOOL];
   const toolCalls = [];
+  const notes = [];
   let leadSaved = false;
   let schedule = null;
   let lastText = "";
 
   // Up to 3 model calls: reply, or tool call -> result -> reply.
   for (let i = 0; i < 3; i++) {
-    const res = await callClaude(env, { system, messages: convo, tools });
-    const toolUses = res.content.filter((c) => c.type === "tool_use");
-    const text = tidy(res.content.filter((c) => c.type === "text").map((c) => c.text).join("\n"));
+    let res = await callClaude(env, { system, messages: convo, tools, maxTokens: 1024 });
+    const empty = (r) => !(r.content || []).some((c) => c.type === "tool_use" || (c.type === "text" && tidy(c.text)));
+    if (empty(res)) {
+      // The model occasionally returns nothing usable; note why and try once more.
+      notes.push(`Empty AI reply (stop_reason: ${res.stop_reason}), retried`);
+      console.warn("Empty reply, retrying", res.stop_reason, JSON.stringify(res.content).slice(0, 300));
+      res = await callClaude(env, { system, messages: convo, tools, maxTokens: 1024 });
+      if (empty(res)) notes.push(`Empty again on retry (stop_reason: ${res.stop_reason})`);
+    }
+    const toolUses = (res.content || []).filter((c) => c.type === "tool_use");
+    const text = tidy((res.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n"));
     if (text) lastText = text;
     if (!["end_turn", "tool_use"].includes(res.stop_reason)) console.warn("Unusual stop_reason", res.stop_reason, JSON.stringify(res.content).slice(0, 500));
 
-    if (res.stop_reason !== "tool_use" || toolUses.length === 0) {
+    if (toolUses.length === 0) {
       const fallback = leadSaved ? savedFallback(env) : "Sorry, I didn't catch that. Could you say it another way?";
-      return { reply: lastText || fallback, leadSaved, schedule, toolCalls };
+      return { reply: lastText || fallback, leadSaved, schedule, toolCalls, notes };
     }
 
     convo.push({ role: "assistant", content: res.content });
@@ -69,5 +78,5 @@ export async function runBot(env, messages, scheduling, handleTool) {
     }
     convo.push({ role: "user", content: results });
   }
-  return { reply: lastText || savedFallback(env), leadSaved, schedule, toolCalls };
+  return { reply: lastText || savedFallback(env), leadSaved, schedule, toolCalls, notes };
 }
