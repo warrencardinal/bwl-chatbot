@@ -4,7 +4,16 @@
 
   var script = document.currentScript;
   var API = new URL(script.src).origin;
-  var COLOR = script.getAttribute("data-color") || "#1f2a44";
+  var COLOR = script.getAttribute("data-color") || "#40085e";
+  // Seconds before the greeting bubble appears; data-delay="0" turns it off.
+  var DELAY = Number(script.getAttribute("data-delay") || 8);
+  var TEASER = "Have a family law question? I can help you reach Brandi Wolfe Law.";
+  var TINT = (function (hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex);
+    if (!m) return "rgba(64,8,94,.15)";
+    var n = parseInt(m[1], 16);
+    return "rgba(" + (n >> 16) + "," + ((n >> 8) & 255) + "," + (n & 255) + ",.15)";
+  })(COLOR);
   var GREETING =
     "Hi, I can help you reach Brandi Wolfe Law or set up a consultation. What can we help you with?";
   var DISCLAIMER =
@@ -79,7 +88,7 @@
     ".card{align-self:stretch;border:1px solid #dde1e8;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:9px;background:#fff}" +
     ".card label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:#3b4456}" +
     ".card input{font-size:16px;padding:9px 10px;border:1px solid #cfd4de;border-radius:8px;color:#1d2433;outline:none;width:100%}" +
-    ".card input:focus{border-color:" + COLOR + ";box-shadow:0 0 0 3px rgba(31,42,68,.12)}" +
+    ".card input:focus{border-color:" + COLOR + ";box-shadow:0 0 0 3px " + TINT + "}" +
     ".card input[aria-invalid=true]{border-color:#b42318}" +
     ".card .fe{font-size:12px;color:#b42318;font-weight:400}" +
     ".card .hint{font-size:12px;color:#6b7385;margin:-2px 0 0}" +
@@ -107,9 +116,16 @@
     ".primary:disabled{opacity:.5;cursor:default}" +
     ".secondary{border:1px solid #cfd4de;border-radius:10px;padding:11px 14px;background:#fff;color:#1d2433;font-size:14px;cursor:pointer}" +
     ".pick{align-self:flex-start;border:0;border-radius:10px;padding:10px 14px;background:" + COLOR + ";color:#fff;font-size:14px;font-weight:600;cursor:pointer}" +
+    ".teaser{position:fixed;right:20px;bottom:92px;z-index:2147483000;max-width:260px;background:#fff;color:#1d2433;border-radius:14px 14px 4px 14px;box-shadow:0 8px 28px rgba(0,0,0,.2);padding:12px 34px 12px 14px;font-size:14px;line-height:1.4;cursor:pointer;display:none;border-top:3px solid " + COLOR + "}" +
+    ".teaser.show{display:block;animation:pop .25s ease-out}" +
+    ".teaser .tx{position:absolute;top:6px;right:6px;background:none;border:0;font-size:18px;line-height:1;color:#6b7385;cursor:pointer;padding:2px 6px}" +
+    "@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}" +
+    "@media (prefers-reduced-motion:reduce){.teaser.show{animation:none}}" +
+    "@media (max-width:480px){.teaser{right:16px;left:16px;max-width:none}}" +
     "@media (max-width:480px){.panel{right:0;bottom:0;width:100vw;max-width:100vw;height:100%;max-height:100%;border-radius:0}.btn.hide{display:none}}" +
     "</style>" +
     '<button class="btn" aria-label="Open chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>' +
+    '<div class="teaser" role="status"><span class="tt"></span><button class="tx" type="button" aria-label="Dismiss">&times;</button></div>' +
     '<div class="panel" role="dialog" aria-label="Chat with Brandi Wolfe Law">' +
     '<div class="head"><b>Brandi Wolfe Law</b><button class="x" aria-label="Close chat">&times;</button></div>' +
     '<div class="disc"></div>' +
@@ -246,7 +262,29 @@
   }
   root.querySelector(".disc").textContent = DISCLAIMER;
 
+  // Greeting bubble: once per visit, only if they haven't opened or dismissed the chat.
+  var teaser = root.querySelector(".teaser");
+  teaser.querySelector(".tt").textContent = TEASER;
+  function hideTeaser(remember) {
+    teaser.classList.remove("show");
+    if (remember) {
+      state.teased = true;
+      save();
+    }
+  }
+  teaser.addEventListener("click", function (e) {
+    if (e.target.closest(".tx")) return hideTeaser(true);
+    hideTeaser(true);
+    toggle(true);
+  });
+  if (DELAY > 0 && !state.teased && !state.messages.length) {
+    setTimeout(function () {
+      if (!panel.classList.contains("open") && !state.teased) teaser.classList.add("show");
+    }, DELAY * 1000);
+  }
+
   btn.addEventListener("click", function () {
+    hideTeaser(true);
     toggle(!panel.classList.contains("open"));
   });
   root.querySelector(".x").addEventListener("click", function () {

@@ -3,7 +3,7 @@
 Website chat for brandiwolfelaw.com on Cloudflare Workers.
 
 - `public/widget.js`: the embed. Add to the site footer:
-  `<script src="https://chat.brandiwolfe.com/widget.js" defer></script>`
+  `<script src="https://chat.brandiwolfe.com/widget.js" defer></script>` (optional: `data-delay="8"` seconds before the greeting bubble, `0` to turn it off; `data-color="#40085e"`)
 - `src/index.js`: `/config`, `/session`, `/chat` (only answers brandiwolfelaw.com), `/admin` (leads list)
 - `src/prompt.js`: bot instructions and lead fields
 - `src/booking.js`, `src/google.js`: uncontested-divorce booking against Brandi's Google Calendar (service account)
