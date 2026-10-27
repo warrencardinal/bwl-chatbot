@@ -5,6 +5,7 @@ import { reportsPage } from "./reports.js";
 import { testsPage, runTests } from "./tests.js";
 import { matterLabel } from "./ui.js";
 import { cleanSource } from "./source.js";
+import { confirmationReply, formNote } from "./confirm.js";
 import { loadSettings, bookingConfigured, openSlots, bookSlot } from "./booking.js";
 
 const MAX_MESSAGES = 40;
@@ -204,7 +205,7 @@ async function handleChat(request, env, cors) {
         },
         env.SESSION_SECRET
       );
-      return { result: "The form is now showing under your reply.", form: { token, lang }, endTurn: true };
+      return { result: "Contact fields are showing under your reply.", form: { token, lang }, endTurn: true };
     }
     if (name === "show_scheduler") {
       try {
@@ -259,32 +260,12 @@ async function handleContact(request, env, cors) {
   );
   if (!result.startsWith("Saved")) return json({ error: es ? "No se pudo guardar. Llame al (210) 571-0400." : "Couldn't save that. Please call (210) 571-0400." }, 500, cors);
 
-  const first = name.split(/\s+/)[0];
-  const reach = phone || email;
-  let reply;
-  let schedule = null;
-  if (form.m === "uncontested_divorce" && (await canSchedule(env, await loadSettings(env), session.sid)) === "ok") {
-    schedule = true;
-    reply = es ? `Gracias, ${first}. Elija un horario para su consulta.` : `Thanks, ${first}. Pick a time for your consultation.`;
-  } else if (form.u) {
-    reply = es
-      ? `Gracias, ${first}. Sus datos están marcados como urgentes y la firma se comunicará con usted lo antes posible al ${reach}. Si alguien está en peligro inmediato, llame al 911.`
-      : `Thanks, ${first}. Your details are marked urgent, and the firm will reach out as soon as possible at ${reach}. If anyone is in immediate danger, call 911.`;
-  } else if (form.m === "existing_client") {
-    reply = es ? `Gracias, ${first}. La firma se comunicará con usted al ${reach}.` : `Thanks, ${first}. The firm will get back to you at ${reach}.`;
-  } else {
-    const booking = (env.BOOKING_URL || "").trim();
-    reply = booking
-      ? es
-        ? `Gracias, ${first}. Puede elegir un horario para su consulta aquí: ${booking}`
-        : `Thanks, ${first}. You can pick a consultation time here: ${booking}`
-      : es
-        ? `Gracias, ${first}. Alguien de la firma se comunicará con usted al ${reach} para programar una consulta.`
-        : `Thanks, ${first}. Someone from the firm will contact you at ${reach} to schedule a consultation.`;
-  }
-
-  // What the bot sees on later turns, so it doesn't ask again.
-  const note = `I filled in the contact form. Name: ${name}. Phone: ${phone || "none"}. Email: ${email || "none"}. Other party: ${clip(body.opposing_party, 120) || "not given"}.`;
+  const schedule =
+    form.m === "uncontested_divorce" && (await canSchedule(env, await loadSettings(env), session.sid)) === "ok" ? true : null;
+  const reply = confirmationReply({
+    name, phone, email, matter: form.m, urgent: form.u, lang: es ? "es" : "en", schedule, bookingUrl: env.BOOKING_URL,
+  });
+  const note = formNote({ name, phone, email, opposing_party: clip(body.opposing_party, 120) });
   return json({ ok: true, reply, schedule, note }, 200, cors);
 }
 

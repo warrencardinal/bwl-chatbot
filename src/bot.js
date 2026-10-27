@@ -65,7 +65,7 @@ export async function runBot(env, messages, scheduling, handleTool) {
 
     if (toolUses.length === 0) {
       const fallback = form
-        ? (form.lang === "es" ? "Escriba sus datos abajo." : "Please enter your details below.")
+        ? (form.lang === "es" ? "¿Me puede dar su nombre y la mejor forma de comunicarnos con usted?" : "Can I get your name and the best way for the firm to reach you?")
         : leadSaved
           ? savedFallback(env)
           : "Sorry, I didn't catch that. Could you say it another way?";
@@ -87,9 +87,9 @@ export async function runBot(env, messages, scheduling, handleTool) {
     convo.push({ role: "user", content: results });
     // The contact form speaks for itself: reply with what the bot already said and stop.
     if (endTurn) {
-      const formText = form && form.lang === "es" ? "Escriba sus datos en el formulario de abajo." : "Please enter your details in the form below.";
+      const formText = form && form.lang === "es" ? "¿Me puede dar su nombre y la mejor forma de comunicarnos con usted?" : "Can I get your name and the best way for the firm to reach you?";
       return { reply: text || formText, leadSaved, schedule, form, toolCalls, notes };
     }
   }
-  return { reply: lastText || (form ? "Please enter your details below." : savedFallback(env)), leadSaved, schedule, form, toolCalls, notes };
+  return { reply: lastText || (form ? "Can I get your name and the best way for the firm to reach you?" : savedFallback(env)), leadSaved, schedule, form, toolCalls, notes };
 }
