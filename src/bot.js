@@ -1,4 +1,4 @@
-import { systemPrompt, SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL } from "./prompt.js";
+import { systemPrompt, SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL, CONTACT_FORM_TOOL } from "./prompt.js";
 
 export async function callClaude(env, { system, messages, tools, toolChoice, model, maxTokens = 500 }) {
   const base = env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
@@ -39,11 +39,12 @@ export function savedFallback(env) {
 export async function runBot(env, messages, scheduling, handleTool) {
   const convo = messages.map((m) => ({ role: m.role, content: m.content }));
   const system = systemPrompt(env, scheduling);
-  const tools = scheduling ? [SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL] : [SAVE_LEAD_TOOL];
+  const tools = scheduling ? [CONTACT_FORM_TOOL, SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL] : [CONTACT_FORM_TOOL, SAVE_LEAD_TOOL];
   const toolCalls = [];
   const notes = [];
   let leadSaved = false;
   let schedule = null;
+  let form = null;
   let lastText = "";
 
   // Up to 3 model calls: reply, or tool call -> result -> reply.
@@ -63,20 +64,32 @@ export async function runBot(env, messages, scheduling, handleTool) {
     if (!["end_turn", "tool_use"].includes(res.stop_reason)) console.warn("Unusual stop_reason", res.stop_reason, JSON.stringify(res.content).slice(0, 500));
 
     if (toolUses.length === 0) {
-      const fallback = leadSaved ? savedFallback(env) : "Sorry, I didn't catch that. Could you say it another way?";
-      return { reply: lastText || fallback, leadSaved, schedule, toolCalls, notes };
+      const fallback = form
+        ? (form.lang === "es" ? "Escriba sus datos abajo." : "Please enter your details below.")
+        : leadSaved
+          ? savedFallback(env)
+          : "Sorry, I didn't catch that. Could you say it another way?";
+      return { reply: lastText || fallback, leadSaved, schedule, form, toolCalls, notes };
     }
 
     convo.push({ role: "assistant", content: res.content });
     const results = [];
+    let endTurn = false;
     for (const tu of toolUses) {
       const out = await handleTool(tu.name, tu.input || {});
       if (out.leadSaved) leadSaved = true;
       if (out.schedule) schedule = true;
+      if (out.form) form = out.form;
+      if (out.endTurn) endTurn = true;
       toolCalls.push({ name: tu.name, input: tu.input || {}, result: out.result });
       results.push({ type: "tool_result", tool_use_id: tu.id, content: out.result });
     }
     convo.push({ role: "user", content: results });
+    // The contact form speaks for itself: reply with what the bot already said and stop.
+    if (endTurn) {
+      const formText = form && form.lang === "es" ? "Escriba sus datos en el formulario de abajo." : "Please enter your details in the form below.";
+      return { reply: text || formText, leadSaved, schedule, form, toolCalls, notes };
+    }
   }
-  return { reply: lastText || savedFallback(env), leadSaved, schedule, toolCalls, notes };
+  return { reply: lastText || (form ? "Please enter your details below." : savedFallback(env)), leadSaved, schedule, form, toolCalls, notes };
 }

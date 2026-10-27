@@ -37,7 +37,7 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    if (["/config", "/session", "/chat", "/slots", "/book"].includes(path)) {
+    if (["/config", "/session", "/chat", "/slots", "/book", "/contact"].includes(path)) {
       const origin = request.headers.get("Origin") || "";
       const cors = corsHeaders(origin, url, env, request.method);
       if (!cors) return new Response("Forbidden", { status: 403 });
@@ -56,6 +56,7 @@ export default {
         if (path === "/session") return await handleSession(request, env, cors, ip);
         if (path === "/slots") return await handleSlots(request, env, cors);
         if (path === "/book") return await handleBook(request, env, cors);
+        if (path === "/contact") return await handleContact(request, env, cors);
         return await handleChat(request, env, cors);
       } catch (err) {
         console.error(err);
@@ -188,6 +189,23 @@ async function handleChat(request, env, cors) {
         return { result: "Not saved because of a system error. Ask them to call (210) 571-0400 so the firm gets their details." };
       }
     }
+    if (name === "show_contact_form") {
+      const existing = await env.DB.prepare("SELECT id FROM leads WHERE session_id = ?").bind(session.sid).first();
+      if (existing) return { result: "Their details are already saved. Don't show the form again." };
+      const lang = input.language === "es" ? "es" : "en";
+      const token = await signSession(
+        {
+          sid: session.sid,
+          kind: "form",
+          m: clip(input.matter_type, 60) || "other",
+          s: clip(input.summary, 500),
+          u: input.urgent ? 1 : 0,
+          exp: Date.now() + SESSION_TTL_MS,
+        },
+        env.SESSION_SECRET
+      );
+      return { result: "The form is now showing under your reply.", form: { token, lang }, endTurn: true };
+    }
     if (name === "show_scheduler") {
       try {
         const check = await canSchedule(env, settings, session.sid);
@@ -202,7 +220,72 @@ async function handleChat(request, env, cors) {
     return { result: "Unknown tool." };
   });
 
-  return json({ reply: out.reply, leadSaved: out.leadSaved, schedule: out.schedule }, 200, cors);
+  return json({ reply: out.reply, leadSaved: out.leadSaved, schedule: out.schedule, form: out.form }, 200, cors);
+}
+
+// ---------- Contact form ----------
+
+const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+async function handleContact(request, env, cors) {
+  const body = await request.json().catch(() => null);
+  if (!body) return json({ error: "Bad request" }, 400, cors);
+  const session = env.SESSION_SECRET ? await verifySession(body.session, env.SESSION_SECRET) : null;
+  if (!session) return json({ error: "session_expired" }, 401, cors);
+  const form = await verifySession(body.form, env.SESSION_SECRET);
+  if (!form || form.kind !== "form" || form.sid !== session.sid) {
+    return json({ error: "This form has expired. Please type your details in the chat." }, 400, cors);
+  }
+  const es = body.lang === "es";
+
+  const name = clip(body.name, 120);
+  const phone = clip(body.phone, 40);
+  const email = clip(body.email, 200);
+  const digits = (phone || "").replace(/\D/g, "");
+  const errors = {};
+  if (!name) errors.name = es ? "Escriba su nombre." : "Enter your name.";
+  if (phone && (digits.length < 10 || digits.length > 15)) errors.phone = es ? "Revise el número de teléfono." : "Check the phone number.";
+  if (email && !EMAIL_OK.test(email)) errors.email = es ? "Revise el correo electrónico." : "Check the email address.";
+  if (!phone && !email) errors.phone = es ? "Escriba un teléfono o un correo electrónico." : "Enter a phone number or an email.";
+  if (Object.keys(errors).length) return json({ errors }, 422, cors);
+
+  const sourcePage = typeof body.page === "string" ? body.page.slice(0, 500) : null;
+  const result = await saveLead(
+    env,
+    { name, phone, email, matter_type: form.m, summary: form.s, opposing_party: body.opposing_party, urgent: form.u },
+    session.sid,
+    sourcePage,
+    cleanSource(body.source, sourcePage)
+  );
+  if (!result.startsWith("Saved")) return json({ error: es ? "No se pudo guardar. Llame al (210) 571-0400." : "Couldn't save that. Please call (210) 571-0400." }, 500, cors);
+
+  const first = name.split(/\s+/)[0];
+  const reach = phone || email;
+  let reply;
+  let schedule = null;
+  if (form.m === "uncontested_divorce" && (await canSchedule(env, await loadSettings(env), session.sid)) === "ok") {
+    schedule = true;
+    reply = es ? `Gracias, ${first}. Elija un horario para su consulta.` : `Thanks, ${first}. Pick a time for your consultation.`;
+  } else if (form.u) {
+    reply = es
+      ? `Gracias, ${first}. Sus datos están marcados como urgentes y la firma se comunicará con usted lo antes posible al ${reach}. Si alguien está en peligro inmediato, llame al 911.`
+      : `Thanks, ${first}. Your details are marked urgent, and the firm will reach out as soon as possible at ${reach}. If anyone is in immediate danger, call 911.`;
+  } else if (form.m === "existing_client") {
+    reply = es ? `Gracias, ${first}. La firma se comunicará con usted al ${reach}.` : `Thanks, ${first}. The firm will get back to you at ${reach}.`;
+  } else {
+    const booking = (env.BOOKING_URL || "").trim();
+    reply = booking
+      ? es
+        ? `Gracias, ${first}. Puede elegir un horario para su consulta aquí: ${booking}`
+        : `Thanks, ${first}. You can pick a consultation time here: ${booking}`
+      : es
+        ? `Gracias, ${first}. Alguien de la firma se comunicará con usted al ${reach} para programar una consulta.`
+        : `Thanks, ${first}. Someone from the firm will contact you at ${reach} to schedule a consultation.`;
+  }
+
+  // What the bot sees on later turns, so it doesn't ask again.
+  const note = `I filled in the contact form. Name: ${name}. Phone: ${phone || "none"}. Email: ${email || "none"}. Other party: ${clip(body.opposing_party, 120) || "not given"}.`;
+  return json({ ok: true, reply, schedule, note }, 200, cors);
 }
 
 async function canSchedule(env, settings, sid) {

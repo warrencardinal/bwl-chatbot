@@ -73,13 +73,22 @@
     ".a a{color:inherit;font-weight:600}" +
     ".err{font-size:12px;color:#b42318;align-self:center;text-align:center}" +
     ".typing{color:#6b7385;font-size:13px;align-self:flex-start;padding:4px 2px}" +
-    "form{display:flex;gap:8px;padding:10px;border-top:1px solid #e4e7ee}" +
-    "textarea{flex:1;resize:none;height:42px;max-height:110px;border:1px solid #cfd4de;border-radius:10px;padding:10px 12px;font-size:14px;color:#1d2433;outline:none}" +
-    "textarea:focus{border-color:" + COLOR + "}" +
+    ".composer{display:flex;gap:8px;padding:10px;border-top:1px solid #e4e7ee}" +
+    ".composer textarea{flex:1;resize:none;height:42px;max-height:110px;border:1px solid #cfd4de;border-radius:10px;padding:10px 12px;font-size:14px;color:#1d2433;outline:none}" +
+    ".composer textarea:focus{border-color:" + COLOR + "}" +
+    ".card{align-self:stretch;border:1px solid #dde1e8;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:9px;background:#fff}" +
+    ".card label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:#3b4456}" +
+    ".card input{font-size:16px;padding:9px 10px;border:1px solid #cfd4de;border-radius:8px;color:#1d2433;outline:none;width:100%}" +
+    ".card input:focus{border-color:" + COLOR + ";box-shadow:0 0 0 3px rgba(31,42,68,.12)}" +
+    ".card input[aria-invalid=true]{border-color:#b42318}" +
+    ".card .fe{font-size:12px;color:#b42318;font-weight:400}" +
+    ".card .hint{font-size:12px;color:#6b7385;margin:-2px 0 0}" +
+    ".card .primary{margin-top:2px}" +
+    ".card.done{opacity:.75}" +
     ".send{border:0;border-radius:10px;padding:0 14px;background:" + COLOR + ";color:#fff;font-size:14px;cursor:pointer}" +
     ".send:disabled{opacity:.5;cursor:default}" +
     ".sched{display:none;flex:1;flex-direction:column;min-height:0}" +
-    ".panel.scheduling .log,.panel.scheduling form{display:none}" +
+    ".panel.scheduling .log,.panel.scheduling .composer{display:none}" +
     ".panel.scheduling .sched{display:flex}" +
     ".sbar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #e4e7ee;font-size:13px}" +
     ".back{background:none;border:0;padding:4px 0;font-size:13px;font-weight:600;color:" + COLOR + ";cursor:pointer}" +
@@ -106,13 +115,13 @@
     '<div class="disc"></div>' +
     '<div class="log" aria-live="polite"></div>' +
     '<div class="sched"><div class="sbar"><button class="back" type="button">&larr; Back to chat</button><span class="tz">Central Time</span></div><div class="slots" aria-live="polite"></div></div>' +
-    '<form><textarea placeholder="Type your message" aria-label="Message" maxlength="2000"></textarea><button class="send" type="submit">Send</button></form>' +
+    '<form class="composer"><textarea placeholder="Type your message" aria-label="Message" maxlength="2000"></textarea><button class="send" type="submit">Send</button></form>' +
     "</div>";
 
   var btn = root.querySelector(".btn");
   var panel = root.querySelector(".panel");
   var log = root.querySelector(".log");
-  var form = root.querySelector("form");
+  var form = root.querySelector(".composer");
   var input = root.querySelector("textarea");
   var sendBtn = root.querySelector(".send");
   var slotsEl = root.querySelector(".slots");
@@ -298,8 +307,9 @@
   function render(extra) {
     log.textContent = "";
     bubble("assistant", GREETING);
-    state.messages.forEach(function (m) {
-      bubble(m.role, m.content);
+    state.messages.forEach(function (m, i) {
+      bubble(m.role, m.display || m.content);
+      if (state.form && !state.form.done && state.form.at === i) log.appendChild(contactCard());
     });
     if (state.canSchedule && !state.booked && !busy) {
       var pick = document.createElement("button");
@@ -392,6 +402,132 @@
       });
   }
 
+  var T = {
+    en: { name: "Name", phone: "Phone", email: "Email", other: "Other party's name (optional)", either: "Phone or email is required.", send: "Send my details", sending: "Sending...", fail: "Couldn't send. Please call (210) 571-0400." },
+    es: { name: "Nombre", phone: "Teléfono", email: "Correo electrónico", other: "Nombre de la otra parte (opcional)", either: "Se requiere teléfono o correo electrónico.", send: "Enviar mis datos", sending: "Enviando...", fail: "No se pudo enviar. Llame al (210) 571-0400." },
+  };
+
+  function field(name, label, type, auto, value) {
+    var l = document.createElement("label");
+    l.textContent = label;
+    var i = document.createElement("input");
+    i.name = name;
+    i.type = type;
+    i.autocomplete = auto;
+    if (type === "tel") i.inputMode = "tel";
+    i.maxLength = name === "email" ? 200 : 120;
+    i.value = value || "";
+    var e = document.createElement("span");
+    e.className = "fe";
+    e.setAttribute("aria-live", "polite");
+    l.appendChild(i);
+    l.appendChild(e);
+    return l;
+  }
+
+  function contactCard() {
+    var f = state.form;
+    var t = T[f.lang] || T.en;
+    var v = f.values || {};
+    var card = document.createElement("form");
+    card.className = "card";
+    card.noValidate = true;
+    card.appendChild(field("name", t.name, "text", "name", v.name));
+    card.appendChild(field("phone", t.phone, "tel", "tel", v.phone));
+    card.appendChild(field("email", t.email, "email", "email", v.email));
+    var hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = t.either;
+    card.appendChild(hint);
+    card.appendChild(field("opposing_party", t.other, "text", "off", v.opposing_party));
+    var b = document.createElement("button");
+    b.type = "submit";
+    b.className = "primary";
+    b.textContent = t.send;
+    card.appendChild(b);
+    var note = msg("", "err");
+    card.appendChild(note);
+
+    card.addEventListener("input", function () {
+      f.values = {
+        name: card.elements.name.value,
+        phone: card.elements.phone.value,
+        email: card.elements.email.value,
+        opposing_party: card.elements.opposing_party.value,
+      };
+      save();
+    });
+
+    card.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (busy) return;
+      var vals = {
+        name: card.elements.name.value.trim(),
+        phone: card.elements.phone.value.trim(),
+        email: card.elements.email.value.trim(),
+        opposing_party: card.elements.opposing_party.value.trim(),
+      };
+      ["name", "phone", "email"].forEach(function (k) {
+        card.elements[k].removeAttribute("aria-invalid");
+        card.elements[k].parentNode.querySelector(".fe").textContent = "";
+      });
+      note.textContent = "";
+      busy = true;
+      b.disabled = true;
+      b.textContent = t.sending;
+      getSession()
+        .then(function (session) {
+          return post("/contact", {
+            session: session,
+            form: f.token,
+            lang: f.lang,
+            name: vals.name,
+            phone: vals.phone,
+            email: vals.email,
+            opposing_party: vals.opposing_party,
+            page: location.href,
+            source: source,
+          });
+        })
+        .then(function (d) {
+          busy = false;
+          if (d.ok) {
+            f.done = true;
+            f.values = null;
+            var shown = [vals.name, vals.phone, vals.email].filter(Boolean).join("\n");
+            state.messages.push({ role: "user", content: d.note, display: shown });
+            state.messages.push({ role: "assistant", content: d.reply });
+            if (d.schedule) state.canSchedule = true;
+            save();
+            render();
+            if (d.schedule) showScheduler(true);
+            return;
+          }
+          b.disabled = false;
+          b.textContent = t.send;
+          if (d.errors) {
+            Object.keys(d.errors).forEach(function (k) {
+              var el = card.elements[k];
+              if (!el) return;
+              el.setAttribute("aria-invalid", "true");
+              el.parentNode.querySelector(".fe").textContent = d.errors[k];
+            });
+            var firstBad = card.querySelector("[aria-invalid=true]");
+            if (firstBad) firstBad.focus();
+          } else {
+            note.textContent = d.error || t.fail;
+          }
+        })
+        .catch(function () {
+          busy = false;
+          b.disabled = false;
+          b.textContent = t.send;
+          note.textContent = t.fail;
+        });
+    });
+    return card;
+  }
+
   function restoreLast() {
     var last = state.messages.pop();
     if (last && last.role === "user") input.value = last.content;
@@ -415,11 +551,18 @@
         busy = false;
         if (d.reply) {
           state.messages.push({ role: "assistant", content: d.reply });
+          if (d.form && d.form.token && !(state.form && state.form.done)) {
+            state.form = { token: d.form.token, lang: d.form.lang, at: state.messages.length - 1, done: false };
+          }
           var opened = d.schedule === true && !state.booked;
           if (opened) state.canSchedule = true;
           save();
           render();
           if (opened) showScheduler(true);
+          if (d.form) {
+            var nm = log.querySelector(".card input[name=name]");
+            if (nm) nm.focus();
+          }
         } else {
           restoreLast();
           render(d.error || "Something went wrong. Please call (210) 571-0400.");
