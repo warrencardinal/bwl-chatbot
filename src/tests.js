@@ -105,7 +105,8 @@ async function runCase(env, c) {
     transcript.push({ who: "Bot", text: out.reply });
   }
 
-  const fails = [...new Set(notes)];
+  // A retried empty reply is shown but only fails the test if the retry was empty too.
+  const fails = [...new Set(notes.filter((n) => n.startsWith("Empty again")))];
   const replies = transcript.filter((t) => t.who === "Bot").map((t) => t.text);
   if (replies.some((r) => DASH.test(r))) fails.push("Used an em dash");
   if (replies.some((r) => EMOJI.test(r))) fails.push("Used an emoji");
@@ -130,7 +131,7 @@ async function runCase(env, c) {
   const review = await grade(env, c, transcript);
   if (!review.pass) fails.push(`Review: ${review.reason}`);
 
-  return { id: c.id, group: c.group, rule: c.rule, pass: fails.length === 0, fails, review: review.reason, transcript, tools: calls.map((x) => ({ name: x.name, input: x.input })) };
+  return { id: c.id, group: c.group, rule: c.rule, pass: fails.length === 0, fails, notes: [...new Set(notes)], review: review.reason, transcript, tools: calls.map((x) => ({ name: x.name, input: x.input })) };
 }
 
 async function grade(env, c, transcript) {
@@ -232,6 +233,7 @@ export async function testsPage(env, url) {
   <div class="transcript">${(r.transcript || [])
     .map((t) => `<p class="${t.who === "Bot" ? "bot" : "visitor"}"><b>${t.who}</b>${esc(t.text)}</p>`)
     .join("")}</div>
+  ${r.notes?.length ? `<p class="toolline">${r.notes.map(esc).join("; ")}</p>` : ""}
   ${r.tools?.length ? `<p class="toolline">${r.tools.map((t) => `${esc(t.name)}${t.input?.matter_type ? ` (${esc(t.input.matter_type)}${t.input.urgent ? ", urgent" : ""})` : ""}`).join(", ")}</p>` : ""}
 </details>`;
     body = `<div class="tiles three">
