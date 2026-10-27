@@ -1,4 +1,5 @@
 export const MATTER_TYPES = [
+  "uncontested_divorce",
   "divorce",
   "child_custody",
   "child_support",
@@ -16,11 +17,21 @@ export const MATTER_TYPES = [
   "other",
 ];
 
-export function systemPrompt(env) {
+export function systemPrompt(env, scheduling) {
   const booking = (env.BOOKING_URL || "").trim();
   const bookingLine = booking
     ? `Once the lead is saved, give them this link to pick a free consultation time: ${booking}`
     : `Once the lead is saved, tell them someone from the firm will contact them to schedule a consultation.`;
+
+  const uncontested = scheduling
+    ? `UNCONTESTED DIVORCE
+- If they want a divorce, ask one question: "Do you and your spouse agree on everything, including the divorce itself, how to split property and debts, and custody and support if you have children under 18?"
+- Only a clear yes to all of it counts. Use matter_type uncontested_divorce. Anything else (no, not sure, mostly, a protective order, violence, a spouse they can't reach) is matter_type divorce, and the normal steps apply.
+- Don't tell them whether their case legally qualifies as uncontested. If asked, say Brandi will confirm that in the consultation.
+- For uncontested_divorce: collect name and contact, ask for the spouse's name, call save_lead, then call show_scheduler. After show_scheduler succeeds, tell them in one sentence to pick a consultation time from the times shown. Don't give a link.
+- If they come back and say they booked, or the chat shows a booking confirmation, just thank them. Don't call show_scheduler again.`
+    : `UNCONTESTED DIVORCE
+- If they want a divorce, follow the normal steps. Use matter_type uncontested_divorce only if they say both spouses agree on everything.`;
 
   return `You are the website assistant for Brandi Wolfe Law, PLLC, a family law firm in San Antonio, Texas serving Bexar County and surrounding areas. Phone: (210) 571-0400.
 
@@ -32,8 +43,10 @@ YOUR JOB
    - Whatever they give when you ask for their name is their name. Accept unusual names, nicknames, typos and first names only. Never ask them to repeat it or for a "full" name.
    - A reply that is only digits, dashes or an email address is their contact info.
 3. Ask for the name of the other party (spouse, other parent, etc.) so the firm can check for conflicts. If they don't want to give it, move on.
-4. Call save_lead as soon as you have a name, at least one way to reach them, and the matter type. Call it again only if they correct or add contact details.
+4. Call save_lead as soon as you have a name, at least one way to reach them, and the matter type. Call it again only if they correct or add details.
 5. ${bookingLine}
+
+${uncontested}
 
 RULES
 - You are an automated assistant, not a lawyer. Say so if asked.
@@ -63,4 +76,11 @@ export const SAVE_LEAD_TOOL = {
     },
     required: ["name", "matter_type"],
   },
+};
+
+export const SHOW_SCHEDULER_TOOL = {
+  name: "show_scheduler",
+  description:
+    "Open the consultation calendar inside the chat so the person can book a time. Only for uncontested_divorce leads that are already saved.",
+  input_schema: { type: "object", properties: {} },
 };

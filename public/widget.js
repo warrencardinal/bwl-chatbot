@@ -60,6 +60,26 @@
     "textarea:focus{border-color:" + COLOR + "}" +
     ".send{border:0;border-radius:10px;padding:0 14px;background:" + COLOR + ";color:#fff;font-size:14px;cursor:pointer}" +
     ".send:disabled{opacity:.5;cursor:default}" +
+    ".sched{display:none;flex:1;flex-direction:column;min-height:0}" +
+    ".panel.scheduling .log,.panel.scheduling form{display:none}" +
+    ".panel.scheduling .sched{display:flex}" +
+    ".sbar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #e4e7ee;font-size:13px}" +
+    ".back{background:none;border:0;padding:4px 0;font-size:13px;font-weight:600;color:" + COLOR + ";cursor:pointer}" +
+    ".tz{color:#6b7385}" +
+    ".slots{flex:1;overflow-y:auto;padding:12px 14px}" +
+    ".day{font-size:13px;font-weight:700;margin:12px 0 6px}" +
+    ".day:first-child{margin-top:0}" +
+    ".times{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}" +
+    ".t{border:1px solid #cfd4de;background:#fff;border-radius:8px;padding:8px 0;font-size:13px;color:#1d2433;cursor:pointer}" +
+    ".t:hover{border-color:" + COLOR + "}" +
+    ".note{font-size:13px;color:#5b6375;padding:6px 0}" +
+    ".confirm{padding:16px 14px;display:flex;flex-direction:column;gap:12px}" +
+    ".confirm b{font-size:15px}" +
+    ".row2{display:flex;gap:8px}" +
+    ".primary{flex:1;border:0;border-radius:10px;padding:11px;background:" + COLOR + ";color:#fff;font-size:14px;font-weight:600;cursor:pointer}" +
+    ".primary:disabled{opacity:.5;cursor:default}" +
+    ".secondary{border:1px solid #cfd4de;border-radius:10px;padding:11px 14px;background:#fff;color:#1d2433;font-size:14px;cursor:pointer}" +
+    ".pick{align-self:flex-start;border:0;border-radius:10px;padding:10px 14px;background:" + COLOR + ";color:#fff;font-size:14px;font-weight:600;cursor:pointer}" +
     "@media (max-width:480px){.panel{right:0;bottom:0;width:100vw;max-width:100vw;height:100%;max-height:100%;border-radius:0}.btn.hide{display:none}}" +
     "</style>" +
     '<button class="btn" aria-label="Open chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>' +
@@ -67,6 +87,7 @@
     '<div class="head"><b>Brandi Wolfe Law</b><button class="x" aria-label="Close chat">&times;</button></div>' +
     '<div class="disc"></div>' +
     '<div class="log" aria-live="polite"></div>' +
+    '<div class="sched"><div class="sbar"><button class="back" type="button">&larr; Back to chat</button><span class="tz">Central Time</span></div><div class="slots" aria-live="polite"></div></div>' +
     '<form><textarea placeholder="Type your message" aria-label="Message" maxlength="2000"></textarea><button class="send" type="submit">Send</button></form>' +
     "</div>";
 
@@ -76,6 +97,126 @@
   var form = root.querySelector("form");
   var input = root.querySelector("textarea");
   var sendBtn = root.querySelector(".send");
+  var slotsEl = root.querySelector(".slots");
+  root.querySelector(".back").addEventListener("click", function () {
+    showScheduler(false);
+  });
+
+  function msg(text, cls) {
+    var d = document.createElement("div");
+    d.className = cls || "note";
+    d.textContent = text;
+    return d;
+  }
+
+  function showScheduler(on) {
+    if (on && (!state.canSchedule || state.booked)) return;
+    panel.classList.toggle("scheduling", on);
+    if (on) {
+      loadSlots();
+    } else {
+      render();
+      input.focus();
+    }
+  }
+
+  function loadSlots(notice) {
+    slotsEl.textContent = "";
+    slotsEl.appendChild(msg("Loading open times..."));
+    getSession()
+      .then(function (session) {
+        return post("/slots", { session: session });
+      })
+      .then(function (d) {
+        slotsEl.textContent = "";
+        if (notice) slotsEl.appendChild(msg(notice, "err"));
+        if (!d.days) {
+          slotsEl.appendChild(msg(d.error || "Couldn't load times. Please call (210) 571-0400.", "err"));
+          return;
+        }
+        if (!d.days.length) {
+          slotsEl.appendChild(msg("No open times right now. The firm will contact you to schedule, or call (210) 571-0400."));
+          return;
+        }
+        d.days.forEach(function (day) {
+          slotsEl.appendChild(msg(day.label, "day"));
+          var grid = document.createElement("div");
+          grid.className = "times";
+          day.slots.forEach(function (sl) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "t";
+            b.textContent = sl.label;
+            b.addEventListener("click", function () {
+              confirmSlot(day.label, sl);
+            });
+            grid.appendChild(b);
+          });
+          slotsEl.appendChild(grid);
+        });
+      })
+      .catch(function () {
+        slotsEl.textContent = "";
+        slotsEl.appendChild(msg("Couldn't load times. Please call (210) 571-0400.", "err"));
+      });
+  }
+
+  function confirmSlot(dayText, sl) {
+    slotsEl.textContent = "";
+    var box = document.createElement("div");
+    box.className = "confirm";
+    var title = document.createElement("b");
+    title.textContent = dayText + " at " + sl.label + " Central";
+    var row = document.createElement("div");
+    row.className = "row2";
+    var other = document.createElement("button");
+    other.type = "button";
+    other.className = "secondary";
+    other.textContent = "Other times";
+    var yes = document.createElement("button");
+    yes.type = "button";
+    yes.className = "primary";
+    yes.textContent = "Book this time";
+    row.appendChild(other);
+    row.appendChild(yes);
+    box.appendChild(title);
+    box.appendChild(row);
+    slotsEl.appendChild(box);
+
+    other.addEventListener("click", function () {
+      loadSlots();
+    });
+    yes.addEventListener("click", function () {
+      yes.disabled = true;
+      other.disabled = true;
+      yes.textContent = "Booking...";
+      getSession()
+        .then(function (session) {
+          return post("/book", { session: session, start: sl.start });
+        })
+        .then(function (d) {
+          if (d.ok) {
+            state.booked = true;
+            state.messages.push({ role: "assistant", content: d.message });
+            save();
+            showScheduler(false);
+          } else if (d.refresh) {
+            loadSlots(d.error);
+          } else {
+            box.appendChild(msg(d.error || "Couldn't book. Please call (210) 571-0400.", "err"));
+            yes.textContent = "Book this time";
+            yes.disabled = false;
+            other.disabled = false;
+          }
+        })
+        .catch(function () {
+          box.appendChild(msg("Couldn't book. Please call (210) 571-0400.", "err"));
+          yes.textContent = "Book this time";
+          yes.disabled = false;
+          other.disabled = false;
+        });
+    });
+  }
   root.querySelector(".disc").textContent = DISCLAIMER;
 
   btn.addEventListener("click", function () {
@@ -142,6 +283,16 @@
     state.messages.forEach(function (m) {
       bubble(m.role, m.content);
     });
+    if (state.canSchedule && !state.booked && !busy) {
+      var pick = document.createElement("button");
+      pick.className = "pick";
+      pick.type = "button";
+      pick.textContent = "Pick a consultation time";
+      pick.addEventListener("click", function () {
+        showScheduler(true);
+      });
+      log.appendChild(pick);
+    }
     if (busy) {
       var t = document.createElement("div");
       t.className = "typing";
@@ -246,8 +397,11 @@
         busy = false;
         if (d.reply) {
           state.messages.push({ role: "assistant", content: d.reply });
+          var opened = d.schedule === true && !state.booked;
+          if (opened) state.canSchedule = true;
           save();
           render();
+          if (opened) showScheduler(true);
         } else {
           restoreLast();
           render(d.error || "Something went wrong. Please call (210) 571-0400.");

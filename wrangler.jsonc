@@ -37,5 +37,5 @@
   }
 
   // Secrets (set in Cloudflare dashboard, never in this file):
-  //   ANTHROPIC_API_KEY, SESSION_SECRET, ADMIN_PASSWORD, TURNSTILE_SECRET (only if TURNSTILE_SITE_KEY is set)
+  //   ANTHROPIC_API_KEY, SESSION_SECRET, ADMIN_PASSWORD, GOOGLE_SERVICE_ACCOUNT (JSON key), TURNSTILE_SECRET (only if TURNSTILE_SITE_KEY is set)
 }

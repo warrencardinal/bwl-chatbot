@@ -1,5 +1,6 @@
-import { systemPrompt, SAVE_LEAD_TOOL } from "./prompt.js";
-import { adminPage, updateStatus } from "./admin.js";
+import { systemPrompt, SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL } from "./prompt.js";
+import { adminPage, updateStatus, availabilityPage, saveAvailability } from "./admin.js";
+import { loadSettings, bookingConfigured, openSlots, bookSlot } from "./booking.js";
 
 const MAX_MESSAGES = 40;
 const MAX_CHARS = 2000;
@@ -19,10 +20,12 @@ export default {
       }
       if (path === "/admin" && request.method === "GET") return adminPage(env);
       if (path === "/admin/status" && request.method === "POST") return updateStatus(request, env);
+      if (path === "/admin/availability" && request.method === "GET") return availabilityPage(env, url);
+      if (path === "/admin/availability" && request.method === "POST") return saveAvailability(request, env);
       return new Response("Not found", { status: 404 });
     }
 
-    if (path === "/config" || path === "/session" || path === "/chat") {
+    if (["/config", "/session", "/chat", "/slots", "/book"].includes(path)) {
       const origin = request.headers.get("Origin") || "";
       const cors = corsHeaders(origin, url, env, request.method);
       if (!cors) return new Response("Forbidden", { status: 403 });
@@ -39,6 +42,8 @@ export default {
         if (!success) return json({ error: "Too many messages. Please wait a minute." }, 429, cors);
 
         if (path === "/session") return await handleSession(request, env, cors, ip);
+        if (path === "/slots") return await handleSlots(request, env, cors);
+        if (path === "/book") return await handleBook(request, env, cors);
         return await handleChat(request, env, cors);
       } catch (err) {
         console.error(err);
@@ -157,13 +162,16 @@ async function handleChat(request, env, cors) {
   }
 
   const sourcePage = typeof body.page === "string" ? body.page.slice(0, 500) : null;
+  const settings = await loadSettings(env);
+  const scheduling = bookingConfigured(env, settings);
   const convo = messages.map((m) => ({ role: m.role, content: m.content }));
   let leadSaved = false;
   let lastText = "";
+  let schedule = null;
 
   // Up to 3 model turns: reply, or tool call -> result -> reply.
   for (let i = 0; i < 3; i++) {
-    const res = await callClaude(env, convo);
+    const res = await callClaude(env, convo, scheduling);
     const toolUses = res.content.filter((c) => c.type === "tool_use");
     const text = res.content.filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
 
@@ -171,7 +179,7 @@ async function handleChat(request, env, cors) {
 
     if (res.stop_reason !== "tool_use" || toolUses.length === 0) {
       const fallback = leadSaved ? savedFallback(env) : "Sorry, I didn't catch that. Could you say it another way?";
-      return json({ reply: lastText || fallback, leadSaved }, 200, cors);
+      return json({ reply: lastText || fallback, leadSaved, schedule }, 200, cors);
     }
 
     convo.push({ role: "assistant", content: res.content });
@@ -186,13 +194,121 @@ async function handleChat(request, env, cors) {
           console.error("saveLead failed", err);
           result = "Not saved because of a system error. Ask them to call (210) 571-0400 so the firm gets their details.";
         }
+      } else if (tu.name === "show_scheduler") {
+        try {
+          const check = await canSchedule(env, settings, session.sid);
+          if (check === "ok") {
+            schedule = true;
+            result = "The calendar is now open in the chat.";
+          } else if (check === "booked") {
+            result = "They already have a consultation booked. Tell them the firm will see them then.";
+          } else {
+            result = "Not available. Save an uncontested_divorce lead first, or if already saved, tell them someone from the firm will contact them to schedule.";
+          }
+        } catch (err) {
+          console.error("show_scheduler failed", err);
+          result = "Not available right now. Tell them someone from the firm will contact them to schedule.";
+        }
       }
       results.push({ type: "tool_result", tool_use_id: tu.id, content: result });
     }
     convo.push({ role: "user", content: results });
   }
 
-  return json({ reply: lastText || savedFallback(env), leadSaved }, 200, cors);
+  return json({ reply: lastText || savedFallback(env), leadSaved, schedule }, 200, cors);
+}
+
+async function canSchedule(env, settings, sid) {
+  if (!bookingConfigured(env, settings)) return "off";
+  const lead = await env.DB.prepare("SELECT id, matter_type FROM leads WHERE session_id = ?").bind(sid).first();
+  if (!lead || lead.matter_type !== "uncontested_divorce") return "no_lead";
+  const booked = await env.DB.prepare(
+    "SELECT id FROM bookings WHERE session_id = ? AND status != 'cancelled'"
+  ).bind(sid).first();
+  return booked ? "booked" : "ok";
+}
+
+// ---------- Booking ----------
+
+async function sessionFrom(request, env) {
+  const body = await request.json().catch(() => null);
+  if (!body) return { body: null, session: null };
+  const session = env.SESSION_SECRET ? await verifySession(body.session, env.SESSION_SECRET) : null;
+  return { body, session };
+}
+
+async function handleSlots(request, env, cors) {
+  const { session } = await sessionFrom(request, env);
+  if (!session) return json({ error: "session_expired" }, 401, cors);
+  const settings = await loadSettings(env);
+  const check = await canSchedule(env, settings, session.sid);
+  if (check !== "ok") return json({ error: "Scheduling isn't available for this chat.", state: check }, 403, cors);
+  const days = await openSlots(env, settings);
+  return json({ days }, 200, cors);
+}
+
+async function handleBook(request, env, cors) {
+  const { body, session } = await sessionFrom(request, env);
+  if (!session) return json({ error: "session_expired" }, 401, cors);
+  const settings = await loadSettings(env);
+  const check = await canSchedule(env, settings, session.sid);
+  if (check !== "ok") return json({ error: "Scheduling isn't available for this chat.", state: check }, 403, cors);
+
+  const lead = await env.DB.prepare("SELECT * FROM leads WHERE session_id = ?").bind(session.sid).first();
+  const result = await bookSlot(env, settings, { lead, sid: session.sid, startIso: body.start });
+  if (!result.ok) return json(result, 409, cors);
+
+  const note = (settings.confirmation_note || "").trim();
+  const message =
+    `You're booked for ${result.label}.` +
+    (lead.email ? ` A confirmation is on its way to ${lead.email}.` : "") +
+    (note ? ` ${note}` : "");
+
+  const emails = [];
+  const firmTo = routeFor(env, "uncontested_divorce");
+  if (env.ALERT_FROM && firmTo) {
+    emails.push(
+      env.EMAIL.send({
+        from: { email: env.ALERT_FROM, name: "BWL Website Chat" },
+        to: firmTo,
+        subject: `Consultation booked: ${lead.name || "website lead"}, ${result.label}`,
+        text: [
+          `Time: ${result.label}`,
+          `Name: ${lead.name || ""}`,
+          `Phone: ${lead.phone || ""}`,
+          `Email: ${lead.email || ""}`,
+          `Other party: ${lead.opposing_party || ""}`,
+          `Summary: ${lead.summary || ""}`,
+          `Lead #${lead.id}. It's on the calendar.`,
+        ].join("\n"),
+      })
+    );
+  }
+  if (env.ALERT_FROM && lead.email) {
+    emails.push(
+      env.EMAIL.send({
+        from: { email: env.ALERT_FROM, name: "Brandi Wolfe Law" },
+        to: lead.email,
+        replyTo: firmTo || undefined,
+        subject: `Your consultation with Brandi Wolfe Law: ${result.label}`,
+        text: [
+          `Hi ${lead.name || ""},`,
+          "",
+          `Your consultation with Brandi Wolfe Law is booked for ${result.label}.`,
+          note,
+          "",
+          "To reschedule or cancel, call (210) 571-0400.",
+          "",
+          "Brandi Wolfe Law, PLLC",
+          "7550 W Interstate 10, Suite 800, San Antonio, TX 78230",
+        ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n"),
+      })
+    );
+  }
+  const sent = await Promise.allSettled(emails);
+  sent.forEach((r) => r.status === "rejected" && console.error("Booking email failed", r.reason));
+
+  return json({ ok: true, message }, 200, cors);
 }
 
 function savedFallback(env) {
@@ -209,14 +325,16 @@ function cleanMessages(raw) {
     if (!m || (m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string") return null;
     const content = m.content.trim().slice(0, MAX_CHARS);
     if (!content) return null;
-    out.push({ role: m.role, content });
+    const prev = out[out.length - 1];
+    // Booking confirmations add a second assistant message in a row; merge same-role runs.
+    if (prev && prev.role === m.role) prev.content = `${prev.content}\n\n${content}`.slice(0, MAX_CHARS * 2);
+    else out.push({ role: m.role, content });
   }
   if (out[0].role !== "user" || out[out.length - 1].role !== "user") return null;
-  for (let i = 1; i < out.length; i++) if (out[i].role === out[i - 1].role) return null;
   return out;
 }
 
-async function callClaude(env, messages) {
+async function callClaude(env, messages, scheduling) {
   const base = env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
   const res = await fetch(`${base}/v1/messages`, {
     method: "POST",
@@ -228,8 +346,8 @@ async function callClaude(env, messages) {
     body: JSON.stringify({
       model: env.MODEL || "claude-haiku-5-5",
       max_tokens: 500,
-      system: systemPrompt(env),
-      tools: [SAVE_LEAD_TOOL],
+      system: systemPrompt(env, scheduling),
+      tools: scheduling ? [SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL] : [SAVE_LEAD_TOOL],
       messages,
     }),
   });

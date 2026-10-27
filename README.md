@@ -6,8 +6,12 @@ Website chat for brandiwolfelaw.com on Cloudflare Workers.
   `<script src="https://<worker-url>/widget.js" defer></script>`
 - `src/index.js`: `/config`, `/session`, `/chat` (only answers brandiwolfelaw.com), `/admin` (leads list)
 - `src/prompt.js`: bot instructions and lead fields
+- `src/booking.js`, `src/google.js`: uncontested-divorce booking against Brandi's Google Calendar (service account)
+- `/admin/availability`: days, hours and booking rules
 - `migrations/`: D1 schema (`bwl-chat-leads`)
 - `/demo`: test page on the Worker itself
 
 Settings live in `wrangler.jsonc` `vars`. Secrets are set in the Cloudflare dashboard:
-`ANTHROPIC_API_KEY`, `SESSION_SECRET`, `ADMIN_PASSWORD`, and `TURNSTILE_SECRET` if Turnstile is on.
+`ANTHROPIC_API_KEY`, `SESSION_SECRET`, `ADMIN_PASSWORD`, `GOOGLE_SERVICE_ACCOUNT` (full JSON key), and `TURNSTILE_SECRET` if Turnstile is on.
+
+Migrations are applied to D1 by hand (Workers Builds only deploys).
