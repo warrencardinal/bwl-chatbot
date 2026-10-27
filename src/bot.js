@@ -1,6 +1,6 @@
 import { systemPrompt, SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL } from "./prompt.js";
 
-export async function callClaude(env, { system, messages, tools, model, maxTokens = 500 }) {
+export async function callClaude(env, { system, messages, tools, toolChoice, model, maxTokens = 500 }) {
   const base = env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
   const res = await fetch(`${base}/v1/messages`, {
     method: "POST",
@@ -14,11 +14,17 @@ export async function callClaude(env, { system, messages, tools, model, maxToken
       max_tokens: maxTokens,
       system,
       ...(tools ? { tools } : {}),
+      ...(toolChoice ? { tool_choice: toolChoice } : {}),
       messages,
     }),
   });
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
   return res.json();
+}
+
+// Drop a dangling opening "¿" or "¡" (or other stray trailing punctuation) left by a cut-off sentence.
+export function tidy(text) {
+  return String(text || "").trim().replace(/\s*[¿¡:,(]+$/u, "").trim();
 }
 
 export function savedFallback(env) {
@@ -43,8 +49,9 @@ export async function runBot(env, messages, scheduling, handleTool) {
   for (let i = 0; i < 3; i++) {
     const res = await callClaude(env, { system, messages: convo, tools });
     const toolUses = res.content.filter((c) => c.type === "tool_use");
-    const text = res.content.filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
+    const text = tidy(res.content.filter((c) => c.type === "text").map((c) => c.text).join("\n"));
     if (text) lastText = text;
+    if (!["end_turn", "tool_use"].includes(res.stop_reason)) console.warn("Unusual stop_reason", res.stop_reason, JSON.stringify(res.content).slice(0, 500));
 
     if (res.stop_reason !== "tool_use" || toolUses.length === 0) {
       const fallback = leadSaved ? savedFallback(env) : "Sorry, I didn't catch that. Could you say it another way?";
