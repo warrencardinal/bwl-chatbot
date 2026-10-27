@@ -194,7 +194,7 @@ async function grade(env, c, transcript) {
       const raw = JSON.stringify(res.content).slice(0, 200);
       return { pass: false, reason: `Reviewer gave no clear answer: ${raw}` };
     }
-    return { pass: j.pass, reason: String(j.reason || "").slice(0, 300) };
+    return { pass: j.pass, reason: String(j.reason || "").trim().slice(0, 300) || (j.pass ? "Passed" : "Failed (the reviewer gave no reason)") };
   } catch (err) {
     return { pass: false, reason: `Reviewer error: ${err.message.slice(0, 200)}` };
   }
