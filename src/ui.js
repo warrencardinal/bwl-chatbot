@@ -75,6 +75,9 @@ h2{font-size:16px;font-weight:700;margin:0 0 12px;color:var(--text)}
 .summary{margin:0;color:var(--text)}
 .meta{margin:6px 0 0;font-size:13px;color:var(--muted)}
 .appt{margin:8px 0 0;font-size:14px;font-weight:600;color:var(--green)}
+.appt-row{display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap}
+.appt-row form{margin:0}
+.link-btn{background:none;border:0;padding:0;font:inherit;font-size:13px;font-weight:600;color:var(--red);cursor:pointer;text-decoration:underline}
 .contact{display:flex;flex-direction:column;gap:6px;font-size:14px}
 .contact a{text-decoration:none;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
 .contact a:hover{text-decoration:underline}
@@ -127,16 +130,58 @@ input[type=number]{width:96px}
 .btn{font:inherit;font-weight:700;padding:10px 20px;border:0;border-radius:8px;background:var(--ink);color:var(--surface);cursor:pointer}
 .btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
 .btn:hover{filter:brightness(1.08)}
+/* reports */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0 0 18px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.tile b{display:block;font-size:30px;line-height:1.1;font-weight:800;color:var(--ink);letter-spacing:-.02em}
+.tile span{display:block;margin-top:4px;font-size:13px;color:var(--muted)}
+.reports{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+.report{overflow-x:auto}
+.rtable{width:100%;border-collapse:collapse;font-size:14px}
+.rtable th,.rtable td{padding:7px 0;border-top:1px solid var(--line);text-align:left;vertical-align:middle}
+.rtable thead th{border-top:0;font-size:13px;font-weight:600;color:var(--muted);padding-top:0}
+.rtable tbody th{font-weight:600;padding-right:12px;max-width:260px;overflow-wrap:anywhere}
+.rtable tbody tr:hover{background:var(--soft)}
+.rtable .num{text-align:right;width:58px;font-variant-numeric:tabular-nums}
+.barcell{width:34%;padding-right:8px}
+.bar{display:block;height:10px;min-width:4px;border-radius:0 4px 4px 0;background:var(--ink)}
+.path{font-size:13px}
+.muted{color:var(--muted)}
+.more,.empty-row{font-size:13px;color:var(--muted)}
+.more{margin:10px 0 0}
+/* tests */
+.headrow{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 18px}
+.headrow h1{margin:0}
+.headrow form{margin:0}
+.btn:disabled{opacity:.6;cursor:progress}
+.tiles.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.case{border-top:1px solid var(--line);padding:10px 0}
+.case:first-of-type{border-top:0;padding-top:0}
+.case summary{font-weight:600;display:flex;gap:12px;align-items:baseline;list-style:none}
+.case summary::-webkit-details-marker{display:none}
+.case summary .dot{flex:none;font-size:13px;width:52px}
+.fails{margin:8px 0 0 64px;padding:0;color:var(--red);font-size:14px}
+.transcript{margin:10px 0 0 64px;display:flex;flex-direction:column;gap:6px}
+.transcript p{margin:0;font-size:14px;padding:8px 12px;border-radius:10px;max-width:640px;white-space:pre-wrap}
+.transcript b{display:block;font-size:12px;color:var(--muted);margin-bottom:2px}
+.transcript .visitor{background:var(--soft)}
+.transcript .bot{border:1px solid var(--line)}
+.toolline{margin:6px 0 0 64px;font-size:13px;color:var(--muted)}
 details summary{cursor:pointer;font-weight:700;list-style-position:inside}
 details[open] summary{margin-bottom:12px}
 
 @media (max-width:860px){
   .cols{grid-template-columns:1fr}
+  .reports{grid-template-columns:1fr}
+  .tiles,.tiles.three{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fails,.transcript,.toolline{margin-left:0}
   .side{position:static;order:-1}
   .lead{grid-template-columns:1fr;gap:10px}
   .when b{display:inline;margin-right:6px}
   .contact{flex-direction:row;flex-wrap:wrap;gap:6px 16px}
-  .tabs{margin-left:0;width:100%}
+  .tabs{margin-left:0;width:100%;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs a{white-space:nowrap;flex:none}
 }
 @media (max-width:520px){
   .day{grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);row-gap:8px}
@@ -160,7 +205,7 @@ export function page(title, active, body) {
 <style>${CSS}</style></head><body>
 <header class="top"><div class="top-in">
 <div class="brand"><b>Brandi Wolfe Law</b><span>Website chat</span></div>
-<nav class="tabs">${tab("/admin", "leads", "Leads")}${tab("/admin/availability", "availability", "Availability")}${tab("/admin/alerts", "alerts", "Alerts")}</nav>
+<nav class="tabs">${tab("/admin", "leads", "Leads")}${tab("/admin/reports", "reports", "Reports")}${tab("/admin/availability", "availability", "Availability")}${tab("/admin/alerts", "alerts", "Alerts")}${tab("/admin/tests", "tests", "Tests")}</nav>
 </div></header>
 <main>${body}</main>
 </body></html>`;

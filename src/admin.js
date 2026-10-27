@@ -1,7 +1,8 @@
-import { loadSettings, saveSettings, openSlots, DAY_NAMES, fullLabel, TZ } from "./booking.js";
+import { loadSettings, saveSettings, openSlots, cancelBooking, DAY_NAMES, fullLabel, TZ } from "./booking.js";
 import { serviceAccountEmail } from "./google.js";
 import { loadAlerts, saveAlerts, parseEmails, leadRecipients } from "./alerts.js";
 import { esc, page, flash, sameOrigin, matterLabel, MATTER_KEYS } from "./ui.js";
+import { pathOf } from "./source.js";
 
 const STATUSES = ["new", "contacted", "booked", "closed"];
 const STATUS_LABELS = { new: "New", contacted: "Contacted", booked: "Booked", closed: "Closed" };
@@ -28,7 +29,7 @@ export async function adminPage(env, url) {
   const where =
     filter === "all" ? "" : filter === "open" ? "WHERE l.status != 'closed'" : "WHERE l.status = ?";
   const stmt = env.DB.prepare(
-    `SELECT l.*, b.start_utc AS appt FROM leads l
+    `SELECT l.*, b.start_utc AS appt, b.id AS booking_id FROM leads l
      LEFT JOIN bookings b ON b.lead_id = l.id AND b.status = 'confirmed'
      ${where} ORDER BY l.created_at DESC LIMIT 300`
   );
@@ -63,7 +64,12 @@ export async function adminPage(env, url) {
     <p class="name">${esc(l.name || "No name")} ${tags}</p>
     ${l.summary ? `<p class="summary">${esc(l.summary)}</p>` : ""}
     ${l.opposing_party ? `<p class="meta">Other party: ${esc(l.opposing_party)}</p>` : ""}
-    ${l.appt ? `<p class="appt">Consultation: ${esc(fullLabel(Date.parse(l.appt)))}</p>` : ""}
+    ${l.channel ? `<p class="meta">Came from ${esc(l.channel)}${l.utm_campaign ? ` (${esc(l.utm_campaign)})` : ""}${l.landing_page ? `, landed on ${esc(pathOf(l.landing_page))}` : ""}</p>` : ""}
+    ${l.appt ? `<div class="appt-row"><p class="appt">Consultation: ${esc(fullLabel(Date.parse(l.appt)))}</p>
+      <form method="post" action="/admin/cancel" onsubmit="return confirm('Cancel this consultation and remove it from the calendar? The client is not notified.')">
+        <input type="hidden" name="booking" value="${l.booking_id}"><input type="hidden" name="show" value="${filter}">
+        <button class="link-btn" type="submit">Cancel consultation</button>
+      </form></div>` : ""}
   </div>
   <div class="contact">
     ${l.phone ? `<a href="tel:${esc(l.phone.replace(/[^\d+]/g, ""))}">${esc(l.phone)}</a>` : ""}
@@ -84,6 +90,7 @@ export async function adminPage(env, url) {
     "Leads",
     "leads",
     `<h1>Leads</h1>
+${flash(url)}
 <nav class="filters" aria-label="Filter leads">${chips}</nav>
 <section class="list">${rows || '<p class="empty">No leads here yet.</p>'}</section>`
   );
@@ -100,6 +107,23 @@ export async function updateStatus(request, env) {
 
   await env.DB.prepare("UPDATE leads SET status = ? WHERE id = ?").bind(status, id).run();
   return Response.redirect(`${url.origin}/admin?show=${show}`, 303);
+}
+
+export async function cancelConsult(request, env) {
+  if (!sameOrigin(request)) return new Response("Forbidden", { status: 403 });
+  const url = new URL(request.url);
+  const form = await request.formData();
+  const id = Number(form.get("booking"));
+  const show = String(form.get("show") || "open").replace(/[^a-z]/g, "");
+  const back = (k, v) => Response.redirect(`${url.origin}/admin?show=${show}&${k}=${encodeURIComponent(v)}`, 303);
+  if (!Number.isInteger(id)) return back("error", "Couldn't find that consultation.");
+  try {
+    const r = await cancelBooking(env, await loadSettings(env), id);
+    if (r.error) return back("error", r.error);
+    return back("ok", "Consultation cancelled and removed from the calendar. The time is open again.");
+  } catch (err) {
+    return back("error", `Couldn't cancel: ${err.message}`);
+  }
 }
 
 // ---------- Availability ----------

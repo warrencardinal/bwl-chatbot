@@ -10,6 +10,24 @@
   var DISCLAIMER =
     "Automated assistant. Not legal advice. Chatting does not create an attorney-client relationship. Please don't share confidential details here.";
   var STORE = "bwlchat_v1";
+  var SRC = "bwlchat_src";
+
+  // First page of the visit: where they landed and how they got here.
+  var source = null;
+  try {
+    source = JSON.parse(sessionStorage.getItem(SRC));
+  } catch (e) {}
+  if (!source) {
+    var q = new URLSearchParams(location.search);
+    source = { landing: location.href.slice(0, 500), referrer: (document.referrer || "").slice(0, 500) };
+    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "gbraid", "wbraid", "msclkid", "fbclid"].forEach(function (k) {
+      var v = q.get(k);
+      if (v) source[k] = v.slice(0, 200);
+    });
+    try {
+      sessionStorage.setItem(SRC, JSON.stringify(source));
+    } catch (e) {}
+  }
 
   function start() {
 
@@ -385,7 +403,7 @@
     render();
     getSession()
       .then(function (session) {
-        return post("/chat", { session: session, messages: state.messages, page: location.href });
+        return post("/chat", { session: session, messages: state.messages, page: location.href, source: source });
       })
       .then(function (d) {
         if (d._status === 401 && !retried) {

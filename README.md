@@ -9,6 +9,8 @@ Website chat for brandiwolfelaw.com on Cloudflare Workers.
 - `src/booking.js`, `src/google.js`: uncontested-divorce booking against Brandi's Google Calendar (service account)
 - `/admin/availability`: days, hours and booking rules
 - `/admin/alerts`: who gets lead and booking emails (`src/alerts.js`)
+- `/admin/reports`: leads and bookings by channel, landing page, chat page, matter, campaign (`src/reports.js`, `src/source.js`)
+- `/admin/tests`: runs the scripted conversations in `src/tests.js` against the live bot and grades them. Run after any change to `src/prompt.js`.
 - `migrations/`: D1 schema (`bwl-chat-leads`)
 - `/demo`: test page on the Worker itself
 

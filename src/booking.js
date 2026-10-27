@@ -1,4 +1,4 @@
-import { busyTimes, createEvent } from "./google.js";
+import { busyTimes, createEvent, deleteEvent } from "./google.js";
 
 export const TZ = "America/Chicago";
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -208,4 +208,15 @@ export async function bookSlot(env, s, { lead, sid, startIso }) {
   ]);
 
   return { ok: true, start: startUtc, label: fullLabel(st) };
+}
+
+export async function cancelBooking(env, s, bookingId) {
+  const b = await env.DB.prepare("SELECT * FROM bookings WHERE id = ? AND status = 'confirmed'").bind(bookingId).first();
+  if (!b) return { error: "That consultation was already cancelled." };
+  if (b.event_id) await deleteEvent(env, s.calendar_id, b.event_id);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").bind(b.id),
+    env.DB.prepare("UPDATE leads SET status = 'contacted' WHERE id = ? AND status = 'booked'").bind(b.lead_id),
+  ]);
+  return { ok: true };
 }

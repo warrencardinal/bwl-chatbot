@@ -1,7 +1,10 @@
-import { systemPrompt, SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL } from "./prompt.js";
-import { adminPage, updateStatus, availabilityPage, saveAvailability, alertsPage, saveAlertsForm, sendTestAlert } from "./admin.js";
+import { runBot } from "./bot.js";
+import { adminPage, updateStatus, cancelConsult, availabilityPage, saveAvailability, alertsPage, saveAlertsForm, sendTestAlert } from "./admin.js";
 import { loadAlerts, leadRecipients, bookingRecipients } from "./alerts.js";
+import { reportsPage } from "./reports.js";
+import { testsPage, runTests } from "./tests.js";
 import { matterLabel } from "./ui.js";
+import { cleanSource } from "./source.js";
 import { loadSettings, bookingConfigured, openSlots, bookSlot } from "./booking.js";
 
 const MAX_MESSAGES = 40;
@@ -22,8 +25,12 @@ export default {
       }
       if (path === "/admin" && request.method === "GET") return adminPage(env, url);
       if (path === "/admin/status" && request.method === "POST") return updateStatus(request, env);
+      if (path === "/admin/cancel" && request.method === "POST") return cancelConsult(request, env);
       if (path === "/admin/availability" && request.method === "GET") return availabilityPage(env, url);
       if (path === "/admin/availability" && request.method === "POST") return saveAvailability(request, env);
+      if (path === "/admin/reports" && request.method === "GET") return reportsPage(env, url);
+      if (path === "/admin/tests" && request.method === "GET") return testsPage(env, url);
+      if (path === "/admin/tests/run" && request.method === "POST") return runTests(request, env);
       if (path === "/admin/alerts" && request.method === "GET") return alertsPage(env, url);
       if (path === "/admin/alerts" && request.method === "POST") return saveAlertsForm(request, env);
       if (path === "/admin/alerts/test" && request.method === "POST") return sendTestAlert(request, env);
@@ -167,60 +174,35 @@ async function handleChat(request, env, cors) {
   }
 
   const sourcePage = typeof body.page === "string" ? body.page.slice(0, 500) : null;
+  const origin = cleanSource(body.source, sourcePage);
   const settings = await loadSettings(env);
   const scheduling = bookingConfigured(env, settings);
-  const convo = messages.map((m) => ({ role: m.role, content: m.content }));
-  let leadSaved = false;
-  let lastText = "";
-  let schedule = null;
 
-  // Up to 3 model turns: reply, or tool call -> result -> reply.
-  for (let i = 0; i < 3; i++) {
-    const res = await callClaude(env, convo, scheduling);
-    const toolUses = res.content.filter((c) => c.type === "tool_use");
-    const text = res.content.filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
-
-    if (text) lastText = text;
-
-    if (res.stop_reason !== "tool_use" || toolUses.length === 0) {
-      const fallback = leadSaved ? savedFallback(env) : "Sorry, I didn't catch that. Could you say it another way?";
-      return json({ reply: lastText || fallback, leadSaved, schedule }, 200, cors);
-    }
-
-    convo.push({ role: "assistant", content: res.content });
-    const results = [];
-    for (const tu of toolUses) {
-      let result = "Unknown tool.";
-      if (tu.name === "save_lead") {
-        try {
-          result = await saveLead(env, tu.input || {}, session.sid, sourcePage);
-          leadSaved = result.startsWith("Saved");
-        } catch (err) {
-          console.error("saveLead failed", err);
-          result = "Not saved because of a system error. Ask them to call (210) 571-0400 so the firm gets their details.";
-        }
-      } else if (tu.name === "show_scheduler") {
-        try {
-          const check = await canSchedule(env, settings, session.sid);
-          if (check === "ok") {
-            schedule = true;
-            result = "The calendar is now open in the chat.";
-          } else if (check === "booked") {
-            result = "They already have a consultation booked. Tell them the firm will see them then.";
-          } else {
-            result = "Not available. Save an uncontested_divorce lead first, or if already saved, tell them someone from the firm will contact them to schedule.";
-          }
-        } catch (err) {
-          console.error("show_scheduler failed", err);
-          result = "Not available right now. Tell them someone from the firm will contact them to schedule.";
-        }
+  const out = await runBot(env, messages, scheduling, async (name, input) => {
+    if (name === "save_lead") {
+      try {
+        const result = await saveLead(env, input, session.sid, sourcePage, origin);
+        return { result, leadSaved: result.startsWith("Saved") };
+      } catch (err) {
+        console.error("saveLead failed", err);
+        return { result: "Not saved because of a system error. Ask them to call (210) 571-0400 so the firm gets their details." };
       }
-      results.push({ type: "tool_result", tool_use_id: tu.id, content: result });
     }
-    convo.push({ role: "user", content: results });
-  }
+    if (name === "show_scheduler") {
+      try {
+        const check = await canSchedule(env, settings, session.sid);
+        if (check === "ok") return { result: "The calendar is now open in the chat.", schedule: true };
+        if (check === "booked") return { result: "They already have a consultation booked. Tell them the firm will see them then." };
+        return { result: "Not available. Save an uncontested_divorce lead first, or if already saved, tell them someone from the firm will contact them to schedule." };
+      } catch (err) {
+        console.error("show_scheduler failed", err);
+        return { result: "Not available right now. Tell them someone from the firm will contact them to schedule." };
+      }
+    }
+    return { result: "Unknown tool." };
+  });
 
-  return json({ reply: lastText || savedFallback(env), leadSaved, schedule }, 200, cors);
+  return json({ reply: out.reply, leadSaved: out.leadSaved, schedule: out.schedule }, 200, cors);
 }
 
 async function canSchedule(env, settings, sid) {
@@ -316,14 +298,8 @@ async function handleBook(request, env, cors) {
   return json({ ok: true, message }, 200, cors);
 }
 
-function savedFallback(env) {
-  const booking = (env.BOOKING_URL || "").trim();
-  return booking
-    ? `Thanks, you're all set. You can pick a consultation time here: ${booking}`
-    : "Thanks, you're all set. Someone from the firm will contact you to schedule a consultation.";
-}
 
-function cleanMessages(raw) {
+export function cleanMessages(raw) {
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const out = [];
   for (const m of raw) {
@@ -339,32 +315,12 @@ function cleanMessages(raw) {
   return out;
 }
 
-async function callClaude(env, messages, scheduling) {
-  const base = env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
-  const res = await fetch(`${base}/v1/messages`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: env.MODEL || "claude-haiku-5-5",
-      max_tokens: 500,
-      system: systemPrompt(env, scheduling),
-      tools: scheduling ? [SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL] : [SAVE_LEAD_TOOL],
-      messages,
-    }),
-  });
-  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
-  return res.json();
-}
 
 // ---------- Leads ----------
 
 const clip = (v, n) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
 
-async function saveLead(env, input, sid, sourcePage) {
+async function saveLead(env, input, sid, sourcePage, origin = cleanSource(null, sourcePage)) {
   const lead = {
     name: clip(input.name, 120),
     phone: clip(input.phone, 40),
@@ -394,10 +350,13 @@ async function saveLead(env, input, sid, sourcePage) {
   } else {
     const row = await env.DB.prepare(
       `INSERT INTO leads (name, phone, email, matter_type, summary, opposing_party, urgent, existing_client,
-       routed_to, source_page, session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id`
+       routed_to, source_page, session_id, landing_page, referrer, utm_source, utm_medium, utm_campaign,
+       utm_term, utm_content, click_id, channel) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`
     )
       .bind(lead.name, lead.phone, lead.email, lead.matter_type, lead.summary, lead.opposing_party,
-        lead.urgent, lead.existing_client, null, sourcePage, sid)
+        lead.urgent, lead.existing_client, null, sourcePage, sid, origin.landing_page, origin.referrer,
+        origin.utm_source, origin.utm_medium, origin.utm_campaign, origin.utm_term, origin.utm_content,
+        origin.click_id, origin.channel)
       .first();
     id = row.id;
   }
@@ -416,7 +375,9 @@ async function saveLead(env, input, sid, sourcePage) {
           `Other party: ${lead.opposing_party || ""}`,
           `Summary: ${lead.summary || ""}`,
           `Urgent: ${lead.urgent ? "YES" : "no"}`,
-          `Page: ${sourcePage || ""}`,
+          `Chat page: ${sourcePage || ""}`,
+          `Came from: ${origin.channel}${origin.utm_campaign ? ` (${origin.utm_campaign})` : ""}`,
+          `Landing page: ${origin.landing_page || ""}`,
           `Lead #${id}`,
         ].join("\n"),
       });

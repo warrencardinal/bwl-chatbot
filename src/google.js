@@ -97,3 +97,15 @@ export async function createEvent(env, calendarId, event) {
   if (!res.ok) throw new Error(`Google events.insert: ${data.error?.message || res.status}`);
   return data.id;
 }
+
+export async function deleteEvent(env, calendarId, eventId) {
+  const token = await accessToken(env);
+  const res = await fetch(
+    `${env.GOOGLE_API_BASE || "https://www.googleapis.com"}/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=none`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+  );
+  // 404/410: already removed from the calendar, which is fine.
+  if (res.ok || res.status === 404 || res.status === 410) return;
+  const data = await res.json().catch(() => ({}));
+  throw new Error(`Google events.delete: ${data.error?.message || res.status}`);
+}
