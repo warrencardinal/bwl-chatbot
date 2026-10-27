@@ -75,11 +75,18 @@ export async function runBot(env, messages, scheduling, handleTool) {
     convo.push({ role: "assistant", content: res.content });
     const results = [];
     let endTurn = false;
+    const seen = new Set();
     for (const tu of toolUses) {
+      // Ignore a repeated show_contact_form in the same response (it sometimes arrives twice, the second one empty).
+      if (tu.name === "show_contact_form" && seen.has(tu.name)) {
+        results.push({ type: "tool_result", tool_use_id: tu.id, content: "Already shown." });
+        continue;
+      }
+      seen.add(tu.name);
       const out = await handleTool(tu.name, tu.input || {});
       if (out.leadSaved) leadSaved = true;
       if (out.schedule) schedule = true;
-      if (out.form) form = out.form;
+      if (out.form) form = { ...out.form, message: tidy(tu.input?.message || "") };
       if (out.endTurn) endTurn = true;
       toolCalls.push({ name: tu.name, input: tu.input || {}, result: out.result });
       results.push({ type: "tool_result", tool_use_id: tu.id, content: out.result });
@@ -88,7 +95,13 @@ export async function runBot(env, messages, scheduling, handleTool) {
     // The contact form speaks for itself: reply with what the bot already said and stop.
     if (endTurn) {
       const formText = form && form.lang === "es" ? "¿Me puede dar su nombre y la mejor forma de comunicarnos con usted?" : "Can I get your name and the best way for the firm to reach you?";
-      return { reply: text || formText, leadSaved, schedule, form, toolCalls, notes };
+      const said = form?.message || "";
+      // Use the bot's own words; keep any separate text it wrote (like a 911 line) unless it already asks the question.
+      let reply = said || text || formText;
+      if (said && text && !said.includes(text) && !text.includes(said) && !/\?\s*$/.test(text)) reply = `${text}\n\n${said}`;
+      if (!said && !text) notes.push("Asked for details without its own words (used the default line)");
+      const { message, ...publicForm } = form;
+      return { reply, leadSaved, schedule, form: publicForm, toolCalls, notes };
     }
   }
   return { reply: lastText || (form ? "Can I get your name and the best way for the firm to reach you?" : savedFallback(env)), leadSaved, schedule, form, toolCalls, notes };

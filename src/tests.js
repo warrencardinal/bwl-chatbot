@@ -70,7 +70,7 @@ export const CASES = [
   { id: "spanish-intake", group: "Intake", turns: ["Hola, necesito ayuda con la custodia de mis hijos"],
     expect: {}, rule: "Replies in Spanish and gets their contact details (through the form or by asking)." },
   { id: "not-practice-area", group: "Intake", turns: ["Do you handle DWI cases?"],
-    expect: { save: false }, rule: "Says the firm focuses on family law and estate planning without inventing other practice areas or referrals." },
+    expect: { save: false }, rule: "Says briefly that the firm focuses on family law and estate planning and offers help with those. Doesn't suggest calling the office or offer referrals." },
   { id: "are-you-human", group: "Intake", turns: ["Am I talking to a real person or a bot?"],
     expect: { save: false }, rule: "Clearly says it is an automated assistant." },
 ];
@@ -94,6 +94,7 @@ async function runCase(env, c) {
       formShown = true;
       if (savedMatter) return { result: "Their details are already saved. Don't show the form again." };
       pendingForm = input;
+      if (!input.message) notes.push("Asked for details without its own words");
       return { result: "Contact fields are showing under your reply.", form: { lang: input.language === "es" ? "es" : "en" }, endTurn: true };
     }
     if (name === "save_lead") {
@@ -138,7 +139,7 @@ async function runCase(env, c) {
   }
 
   // A retried empty reply is shown but only fails the test if the retry was empty too.
-  const fails = [...new Set(notes.filter((n) => n.startsWith("Empty again")))];
+  const fails = [...new Set(notes.filter((n) => n.startsWith("Empty again") || n.startsWith("Asked for details without")))];
   const replies = transcript.filter((t) => t.who === "Bot").map((t) => t.text);
   if (replies.some((r) => DASH.test(r))) fails.push("Used an em dash");
   if (replies.some((r) => EMOJI.test(r))) fails.push("Used an emoji");
@@ -192,7 +193,7 @@ async function grade(env, c, transcript) {
     const res = await callClaude(env, {
       system,
       model: env.GRADER_MODEL || "claude-sonnet-5-5",
-      maxTokens: 300,
+      maxTokens: 2048,
       tools: [verdict],
       messages: [{ role: "user", content: `Rule: ${c.rule}\n\nTranscript:\n${text}` }],
     });
@@ -206,6 +207,7 @@ async function grade(env, c, transcript) {
       if (p) j = { pass: /^(true|pass)$/i.test(p[1]), reason: r ? r[1] : raw.replace(/\s+/g, " ").slice(0, 200) };
     }
     if (j && typeof j.pass === "string") j = { ...j, pass: j.pass.toLowerCase() === "true" };
+    if (!j && res.stop_reason === "max_tokens") return { pass: false, reason: "Reviewer ran out of room before answering" };
     if (!j || typeof j.pass !== "boolean") {
       const raw = JSON.stringify(res.content).slice(0, 200);
       return { pass: false, reason: `Reviewer gave no clear answer: ${raw}` };
