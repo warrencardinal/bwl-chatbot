@@ -1,5 +1,7 @@
 import { systemPrompt, SAVE_LEAD_TOOL, SHOW_SCHEDULER_TOOL } from "./prompt.js";
-import { adminPage, updateStatus, availabilityPage, saveAvailability } from "./admin.js";
+import { adminPage, updateStatus, availabilityPage, saveAvailability, alertsPage, saveAlertsForm, sendTestAlert } from "./admin.js";
+import { loadAlerts, leadRecipients, bookingRecipients } from "./alerts.js";
+import { matterLabel } from "./ui.js";
 import { loadSettings, bookingConfigured, openSlots, bookSlot } from "./booking.js";
 
 const MAX_MESSAGES = 40;
@@ -18,10 +20,13 @@ export default {
           headers: { "WWW-Authenticate": 'Basic realm="BWL leads"' },
         });
       }
-      if (path === "/admin" && request.method === "GET") return adminPage(env);
+      if (path === "/admin" && request.method === "GET") return adminPage(env, url);
       if (path === "/admin/status" && request.method === "POST") return updateStatus(request, env);
       if (path === "/admin/availability" && request.method === "GET") return availabilityPage(env, url);
       if (path === "/admin/availability" && request.method === "POST") return saveAvailability(request, env);
+      if (path === "/admin/alerts" && request.method === "GET") return alertsPage(env, url);
+      if (path === "/admin/alerts" && request.method === "POST") return saveAlertsForm(request, env);
+      if (path === "/admin/alerts/test" && request.method === "POST") return sendTestAlert(request, env);
       return new Response("Not found", { status: 404 });
     }
 
@@ -265,8 +270,8 @@ async function handleBook(request, env, cors) {
     (note ? ` ${note}` : "");
 
   const emails = [];
-  const firmTo = routeFor(env, "uncontested_divorce");
-  if (env.ALERT_FROM && firmTo) {
+  const firmTo = bookingRecipients(await loadAlerts(env));
+  if (env.ALERT_FROM && firmTo.length) {
     emails.push(
       env.EMAIL.send({
         from: { email: env.ALERT_FROM, name: "BWL Website Chat" },
@@ -289,7 +294,7 @@ async function handleBook(request, env, cors) {
       env.EMAIL.send({
         from: { email: env.ALERT_FROM, name: "Brandi Wolfe Law" },
         to: lead.email,
-        replyTo: firmTo || undefined,
+        replyTo: firmTo[0] || undefined,
         subject: `Your consultation with Brandi Wolfe Law: ${result.label}`,
         text: [
           `Hi ${lead.name || ""},`,
@@ -371,7 +376,7 @@ async function saveLead(env, input, sid, sourcePage) {
   };
   if (!lead.phone && !lead.email) return "Not saved: need a phone number or email first.";
   lead.existing_client = lead.matter_type === "existing_client" ? 1 : 0;
-  const to = routeFor(env, lead.matter_type);
+  const to = leadRecipients(await loadAlerts(env), lead.matter_type, Boolean(lead.urgent));
 
   const existing = await env.DB.prepare("SELECT id, notified FROM leads WHERE session_id = ?").bind(sid).first();
 
@@ -392,22 +397,22 @@ async function saveLead(env, input, sid, sourcePage) {
        routed_to, source_page, session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id`
     )
       .bind(lead.name, lead.phone, lead.email, lead.matter_type, lead.summary, lead.opposing_party,
-        lead.urgent, lead.existing_client, to, sourcePage, sid)
+        lead.urgent, lead.existing_client, null, sourcePage, sid)
       .first();
     id = row.id;
   }
 
-  if (!notified && to && env.ALERT_FROM) {
+  if (!notified && to.length && env.ALERT_FROM) {
     try {
       await env.EMAIL.send({
         from: { email: env.ALERT_FROM, name: "BWL Website Chat" },
         to,
-        subject: `${lead.urgent ? "URGENT: " : ""}New chat lead: ${lead.matter_type.replace(/_/g, " ")} (${lead.name || "no name"})`,
+        subject: `${lead.urgent ? "URGENT: " : ""}New chat lead: ${matterLabel(lead.matter_type)} (${lead.name || "no name"})`,
         text: [
           `Name: ${lead.name || ""}`,
           `Phone: ${lead.phone || ""}`,
           `Email: ${lead.email || ""}`,
-          `Matter: ${lead.matter_type}`,
+          `Matter: ${matterLabel(lead.matter_type)}`,
           `Other party: ${lead.opposing_party || ""}`,
           `Summary: ${lead.summary || ""}`,
           `Urgent: ${lead.urgent ? "YES" : "no"}`,
@@ -415,21 +420,13 @@ async function saveLead(env, input, sid, sourcePage) {
           `Lead #${id}`,
         ].join("\n"),
       });
-      await env.DB.prepare("UPDATE leads SET notified = 1 WHERE id = ?").bind(id).run();
+      await env.DB.prepare("UPDATE leads SET notified = 1, routed_to = ? WHERE id = ?").bind(to.join(","), id).run();
     } catch (err) {
       console.error("Alert email failed", err);
     }
   }
 
   return "Saved. The firm has the details.";
-}
-
-function routeFor(env, matterType) {
-  let routes = {};
-  try {
-    routes = JSON.parse(env.ROUTES || "{}");
-  } catch {}
-  return (routes[matterType] || env.ALERT_TO || "").trim() || null;
 }
 
 // ---------- Helpers ----------

@@ -29,8 +29,8 @@
     "ALLOWED_ORIGINS": "https://brandiwolfelaw.com,https://www.brandiwolfelaw.com",
     "BOOKING_URL": "",
     "ALERT_FROM": "alerts@brandiwolfe.com",
+    // Recipients are managed at /admin/alerts. These are only used until that page is saved.
     "ALERT_TO": "",
-    // Optional per-matter routing, e.g. {"estate_planning":"someone@brandiwolfelaw.com"}
     "ROUTES": "{}",
     "MODEL": "claude-haiku-5-5",
     "TURNSTILE_SITE_KEY": ""
