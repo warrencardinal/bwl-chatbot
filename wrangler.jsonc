@@ -5,6 +5,10 @@
   "compatibility_date": "2026-10-15",
   "observability": { "enabled": true },
 
+  // Served at chat.brandiwolfe.com (zone on this Cloudflare account). The workers.dev address stays on as a backup.
+  "routes": [{ "pattern": "chat.brandiwolfe.com", "custom_domain": true }],
+  "workers_dev": true,
+
   // widget.js and demo.html are served straight from /public
   "assets": { "directory": "./public" },
 
