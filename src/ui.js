@@ -205,7 +205,7 @@ export function page(title, active, body) {
 <style>${CSS}</style></head><body>
 <header class="top"><div class="top-in">
 <div class="brand"><b>Brandi Wolfe Law</b><span>Website chat</span></div>
-<nav class="tabs">${tab("/admin", "leads", "Leads")}${tab("/admin/reports", "reports", "Reports")}${tab("/admin/availability", "availability", "Availability")}${tab("/admin/alerts", "alerts", "Alerts")}${tab("/admin/tests", "tests", "Tests")}</nav>
+<nav class="tabs">${tab("/admin", "leads", "Leads")}${tab("/admin/reports", "reports", "Reports")}${tab("/admin/availability", "availability", "Availability")}${tab("/admin/alerts", "alerts", "Alerts")}${tab("/admin/tests", "tests", "Tests")}<a href="/demo" target="_blank" rel="noopener">Try the chat</a></nav>
 </div></header>
 <main>${body}</main>
 </body></html>`;
