@@ -130,7 +130,7 @@
     '<div class="head"><b>Brandi Wolfe Law</b><button class="x" aria-label="Close chat">&times;</button></div>' +
     '<div class="disc"></div>' +
     '<div class="log" aria-live="polite"></div>' +
-    '<div class="sched"><div class="sbar"><button class="back" type="button">&larr; Back to chat</button><span class="tz">Central Time</span></div><div class="slots" aria-live="polite"></div></div>' +
+    '<div class="sched"><div class="sbar"><button class="back" type="button">&larr; Back to chat</button><span class="tz">Phone consultation, Central Time</span></div><div class="slots" aria-live="polite"></div></div>' +
     '<form class="composer"><textarea placeholder="Type your message" aria-label="Message" maxlength="2000"></textarea><button class="send" type="submit">Send</button></form>' +
     "</div>";
 
@@ -441,8 +441,8 @@
   }
 
   var T = {
-    en: { name: "Name", phone: "Phone", email: "Email", other: "Other party's name (optional)", either: "Phone or email is required.", send: "Send my details", sending: "Sending...", fail: "Couldn't send. Please call (210) 571-0400." },
-    es: { name: "Nombre", phone: "Teléfono", email: "Correo electrónico", other: "Nombre de la otra parte (opcional)", either: "Se requiere teléfono o correo electrónico.", send: "Enviar mis datos", sending: "Enviando...", fail: "No se pudo enviar. Llame al (210) 571-0400." },
+    en: { name: "Name", phone: "Phone", cell: "Cell phone", phoneOnly: "Consultations are by phone only.", email: "Email", other: "Other party's name (optional)", either: "Phone or email is required.", send: "Send my details", sending: "Sending...", fail: "Couldn't send. Please call (210) 571-0400." },
+    es: { name: "Nombre", phone: "Teléfono", cell: "Celular", phoneOnly: "Las consultas son solo por teléfono.", email: "Correo electrónico", other: "Nombre de la otra parte (opcional)", either: "Se requiere teléfono o correo electrónico.", send: "Enviar mis datos", sending: "Enviando...", fail: "No se pudo enviar. Llame al (210) 571-0400." },
   };
 
   function field(name, label, type, auto, value) {
@@ -471,11 +471,11 @@
     card.className = "card";
     card.noValidate = true;
     card.appendChild(field("name", t.name, "text", "name", v.name));
-    card.appendChild(field("phone", t.phone, "tel", "tel", v.phone));
+    card.appendChild(field("phone", f.phoneOnly ? t.cell : t.phone, "tel", "tel", v.phone));
     card.appendChild(field("email", t.email, "email", "email", v.email));
     var hint = document.createElement("p");
     hint.className = "hint";
-    hint.textContent = t.either;
+    hint.textContent = f.phoneOnly ? t.phoneOnly : t.either;
     card.appendChild(hint);
     card.appendChild(field("opposing_party", t.other, "text", "off", v.opposing_party));
     var b = document.createElement("button");
@@ -590,7 +590,7 @@
         if (d.reply) {
           state.messages.push({ role: "assistant", content: d.reply });
           if (d.form && d.form.token && !(state.form && state.form.done)) {
-            state.form = { token: d.form.token, lang: d.form.lang, at: state.messages.length - 1, done: false };
+            state.form = { token: d.form.token, lang: d.form.lang, phoneOnly: !!d.form.phoneOnly, at: state.messages.length - 1, done: false };
           }
           var opened = d.schedule === true && !state.booked;
           if (opened) state.canSchedule = true;

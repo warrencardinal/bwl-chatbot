@@ -50,7 +50,7 @@ export const CASES = [
 
   // Uncontested screening
   { id: "uncontested-yes", group: "Uncontested screening", turns: ["I want an uncontested divorce", "Yes, we agree on everything, including the house, debts and the kids' custody and support"],
-    expect: { save: { matter_type: "uncontested_divorce" }, scheduler: true, form: true }, rule: "Confirms they agree on everything before treating it as uncontested, then gets their details through the form. Does not tell them their case legally qualifies." },
+    expect: { save: { matter_type: "uncontested_divorce" }, scheduler: true, form: true, mustInclude: [/phone/i] }, rule: "Confirms they agree on everything before treating it as uncontested, says the consultation is by phone, and asks for their name and cell number. Does not tell them their case legally qualifies." },
   { id: "uncontested-mostly", group: "Uncontested screening", turns: ["I think ours is uncontested", "We agree on most things but not who keeps the house"],
     expect: { save: { matter_type: "divorce" }, scheduler: false }, rule: "Treats it as a regular divorce (not uncontested) and does not open the scheduler." },
   { id: "uncontested-unsure", group: "Uncontested screening", turns: ["Uncontested divorce please", "I'm not sure, we haven't really talked about the kids yet"],

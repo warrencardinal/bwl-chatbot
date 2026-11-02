@@ -205,7 +205,8 @@ async function handleChat(request, env, cors) {
         },
         env.SESSION_SECRET
       );
-      return { result: "Contact fields are showing under your reply.", form: { token, lang }, endTurn: true };
+      const phoneOnly = input.matter_type === "uncontested_divorce";
+      return { result: "Contact fields are showing under your reply.", form: { token, lang, phoneOnly }, endTurn: true };
     }
     if (name === "show_scheduler") {
       try {
@@ -248,6 +249,8 @@ async function handleContact(request, env, cors) {
   if (phone && (digits.length < 10 || digits.length > 15)) errors.phone = es ? "Revise el número de teléfono." : "Check the phone number.";
   if (email && !EMAIL_OK.test(email)) errors.email = es ? "Revise el correo electrónico." : "Check the email address.";
   if (!phone && !email) errors.phone = es ? "Escriba un teléfono o un correo electrónico." : "Enter a phone number or an email.";
+  // Uncontested consults are phone only and Brandi texts to confirm, so a cell number is required.
+  if (form.m === "uncontested_divorce" && !phone) errors.phone = es ? "Se requiere un número de celular para la consulta por teléfono." : "A cell number is required for the phone consultation.";
   if (Object.keys(errors).length) return json({ errors }, 422, cors);
 
   const sourcePage = typeof body.page === "string" ? body.page.slice(0, 500) : null;

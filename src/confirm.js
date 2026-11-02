@@ -6,7 +6,9 @@ export function confirmationReply({ name, phone, email, matter, urgent, lang, sc
   const first = String(name || "").trim().split(/\s+/)[0] || (es ? "" : "");
   const reach = phone || email;
   if (schedule) {
-    return es ? `Gracias, ${first}. Elija el horario que le quede mejor para su consulta.` : `Thanks, ${first}. Pick whichever consultation time works best for you.`;
+    return es
+      ? `Gracias, ${first}. Elija un horario para su consulta por teléfono.`
+      : `Thanks, ${first}. Pick a time for your phone consultation.`;
   }
   if (urgent) {
     return es
