@@ -192,6 +192,7 @@ export async function bookSlot(env, s, { lead, sid, startIso }) {
         `Email: ${lead.email || ""}`,
         `Other party: ${lead.opposing_party || ""}`,
         `Summary: ${lead.summary || ""}`,
+        `In their words: ${lead.synopsis || ""}`,
         `Booked through the website chat. Lead #${lead.id}`,
       ].join("\n"),
       start: { dateTime: startUtc, timeZone: TZ },

@@ -88,6 +88,10 @@
     ".card{align-self:stretch;border:1px solid #dde1e8;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:9px;background:#fff}" +
     ".card label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:#3b4456}" +
     ".card input{font-size:16px;padding:9px 10px;border:1px solid #cfd4de;border-radius:8px;color:#1d2433;outline:none;width:100%}" +
+    ".card textarea{font-size:16px;padding:9px 10px;border:1px solid #cfd4de;border-radius:8px;color:#1d2433;outline:none;width:100%;resize:vertical;min-height:72px;font-family:inherit;font-weight:400}" +
+    ".card textarea:focus{border-color:" + COLOR + ";box-shadow:0 0 0 3px " + TINT + "}" +
+    ".card textarea[aria-invalid=true]{border-color:#b42318}" +
+    ".card label .hint{font-weight:400;margin:0}" +
     ".card input:focus{border-color:" + COLOR + ";box-shadow:0 0 0 3px " + TINT + "}" +
     ".card input[aria-invalid=true]{border-color:#b42318}" +
     ".card .fe{font-size:12px;color:#b42318;font-weight:400}" +
@@ -441,8 +445,8 @@
   }
 
   var T = {
-    en: { name: "Name", phone: "Phone", cell: "Cell phone", phoneOnly: "Consultations are by phone only.", email: "Email", other: "Other party's name (optional)", either: "Phone or email is required.", send: "Send my details", sending: "Sending...", fail: "Couldn't send. Please call (210) 571-0400." },
-    es: { name: "Nombre", phone: "Teléfono", cell: "Celular", phoneOnly: "Las consultas son solo por teléfono.", email: "Correo electrónico", other: "Nombre de la otra parte (opcional)", either: "Se requiere teléfono o correo electrónico.", send: "Enviar mis datos", sending: "Enviando...", fail: "No se pudo enviar. Llame al (210) 571-0400." },
+    en: { synopsis: "Brief summary of your situation", synopsisHint: "A few sentences is enough. Please leave out account numbers and other sensitive details.", name: "Name", phone: "Phone", cell: "Cell phone", phoneOnly: "Consultations are by phone only.", email: "Email", other: "Other party's name (optional)", either: "Phone or email is required.", send: "Send my details", sending: "Sending...", fail: "Couldn't send. Please call (210) 571-0400." },
+    es: { synopsis: "Breve resumen de su situación", synopsisHint: "Unas pocas oraciones son suficientes. No incluya números de cuenta ni otros datos delicados.", name: "Nombre", phone: "Teléfono", cell: "Celular", phoneOnly: "Las consultas son solo por teléfono.", email: "Correo electrónico", other: "Nombre de la otra parte (opcional)", either: "Se requiere teléfono o correo electrónico.", send: "Enviar mis datos", sending: "Enviando...", fail: "No se pudo enviar. Llame al (210) 571-0400." },
   };
 
   function field(name, label, type, auto, value) {
@@ -478,6 +482,23 @@
     hint.textContent = f.phoneOnly ? t.phoneOnly : t.either;
     card.appendChild(hint);
     card.appendChild(field("opposing_party", t.other, "text", "off", v.opposing_party));
+    var sl = document.createElement("label");
+    sl.textContent = t.synopsis;
+    var sa = document.createElement("textarea");
+    sa.name = "synopsis";
+    sa.maxLength = 1500;
+    sa.rows = 3;
+    sa.value = v.synopsis || "";
+    var sh = document.createElement("span");
+    sh.className = "hint";
+    sh.textContent = t.synopsisHint;
+    var se = document.createElement("span");
+    se.className = "fe";
+    se.setAttribute("aria-live", "polite");
+    sl.appendChild(sa);
+    sl.appendChild(sh);
+    sl.appendChild(se);
+    card.appendChild(sl);
     var b = document.createElement("button");
     b.type = "submit";
     b.className = "primary";
@@ -492,6 +513,7 @@
         phone: card.elements.phone.value,
         email: card.elements.email.value,
         opposing_party: card.elements.opposing_party.value,
+        synopsis: card.elements.synopsis.value,
       };
       save();
     });
@@ -504,8 +526,9 @@
         phone: card.elements.phone.value.trim(),
         email: card.elements.email.value.trim(),
         opposing_party: card.elements.opposing_party.value.trim(),
+        synopsis: card.elements.synopsis.value.trim(),
       };
-      ["name", "phone", "email"].forEach(function (k) {
+      ["name", "phone", "email", "synopsis"].forEach(function (k) {
         card.elements[k].removeAttribute("aria-invalid");
         card.elements[k].parentNode.querySelector(".fe").textContent = "";
       });
@@ -523,6 +546,7 @@
             phone: vals.phone,
             email: vals.email,
             opposing_party: vals.opposing_party,
+            synopsis: vals.synopsis,
             page: location.href,
             source: source,
           });

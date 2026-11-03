@@ -28,6 +28,6 @@ export function confirmationReply({ name, phone, email, matter, urgent, lang, sc
 }
 
 // What the bot sees on later turns, so it doesn't ask again.
-export function formNote({ name, phone, email, opposing_party }) {
-  return `My details: Name: ${name}. Phone: ${phone || "none"}. Email: ${email || "none"}. Other party: ${opposing_party || "not given"}.`;
+export function formNote({ name, phone, email, opposing_party, synopsis }) {
+  return `My details: Name: ${name}. Phone: ${phone || "none"}. Email: ${email || "none"}. Other party: ${opposing_party || "not given"}.${synopsis ? ` Brief summary for Brandi: ${synopsis}` : ""}`;
 }

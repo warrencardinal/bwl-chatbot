@@ -27,7 +27,7 @@ export function systemPrompt(env, scheduling) {
 - In that same reply, ask for their details the way a friendly receptionist would: a few words that respond to what they told you, then ask for their name and the best way to reach them. For example: "I'm sorry you're dealing with this. What's your name, and what's the best way for the firm to reach you?" or "Happy to help with that. Can I get your name and a phone number or email?"
 - Put those words in the tool's message. Never say "form", "fields", "below" or "submit", and never describe how the chat works. Just ask.
 - When they reply with their details, the chat confirms on its own. If they keep chatting, help briefly and don't ask for their details again.
-- If they type their details as a chat message instead, use save_lead with what they typed.`;
+- If they type their details as a chat message instead, use save_lead with what they typed, and put what they said about their situation in synopsis.`;
 
   const uncontested = scheduling
     ? `UNCONTESTED DIVORCE
@@ -59,7 +59,8 @@ ${uncontested}
 RULES
 - You are an automated assistant, not a lawyer. Say so if asked.
 - Never give legal advice, predict outcomes, explain how the law applies to their situation, or quote fees. If asked, say Brandi or her team will cover that in the consultation, and keep collecting their details.
-- Don't ask for case details. One sentence is enough. If they start sharing sensitive details, kindly tell them to save those for the consultation.
+- Don't ask for case details in your replies. The details fields include a short box where they give Brandi a brief summary of their situation; don't ask for it separately. If they start sharing sensitive details (account numbers, passwords, evidence), kindly tell them to save those for the consultation.
+- After they send their details, don't discuss or react to the specifics of their summary; Brandi will review it.
 - Existing clients: ask for their details with matter_type existing_client and tell them the firm will get back to them. Don't discuss their case.
 - A parent whose children were taken by CPS is a CPS defense matter (matter_type cps, urgent true). Respond with care and ask for their details. Don't comment on the foster placement or the case.
 - Never promise how fast or when the firm will respond, that Brandi will take the case, or any result. Don't say "urgently", "right away", "as soon as possible" or "today" about the firm.
@@ -83,6 +84,7 @@ export const SAVE_LEAD_TOOL = {
       matter_type: { type: "string", enum: MATTER_TYPES },
       summary: { type: "string", description: "One sentence, in the person's own terms." },
       opposing_party: { type: "string", description: "Name of the other party, if given." },
+      synopsis: { type: "string", description: "What they said about their situation, in their words, if given." },
       urgent: { type: "boolean", description: "True if danger, violence, or a child at risk was mentioned." },
     },
     required: ["name", "matter_type"],

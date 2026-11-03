@@ -248,6 +248,8 @@ async function handleContact(request, env, cors) {
   if (!name) errors.name = es ? "Escriba su nombre." : "Enter your name.";
   if (phone && (digits.length < 10 || digits.length > 15)) errors.phone = es ? "Revise el número de teléfono." : "Check the phone number.";
   if (email && !EMAIL_OK.test(email)) errors.email = es ? "Revise el correo electrónico." : "Check the email address.";
+  const synopsis = clip(body.synopsis, 1500);
+  if (!synopsis) errors.synopsis = es ? "Escriba un breve resumen de su situación." : "Add a brief summary of your situation.";
   if (!phone && !email) errors.phone = es ? "Escriba un teléfono o un correo electrónico." : "Enter a phone number or an email.";
   // Uncontested consults are phone only and Brandi texts to confirm, so a cell number is required.
   if (form.m === "uncontested_divorce" && !phone) errors.phone = es ? "Se requiere un número de celular para la consulta por teléfono." : "A cell number is required for the phone consultation.";
@@ -256,7 +258,7 @@ async function handleContact(request, env, cors) {
   const sourcePage = typeof body.page === "string" ? body.page.slice(0, 500) : null;
   const result = await saveLead(
     env,
-    { name, phone, email, matter_type: form.m, summary: form.s, opposing_party: body.opposing_party, urgent: form.u },
+    { name, phone, email, matter_type: form.m, summary: form.s, opposing_party: body.opposing_party, synopsis, urgent: form.u },
     session.sid,
     sourcePage,
     cleanSource(body.source, sourcePage)
@@ -268,7 +270,7 @@ async function handleContact(request, env, cors) {
   const reply = confirmationReply({
     name, phone, email, matter: form.m, urgent: form.u, lang: es ? "es" : "en", schedule, bookingUrl: env.BOOKING_URL,
   });
-  const note = formNote({ name, phone, email, opposing_party: clip(body.opposing_party, 120) });
+  const note = formNote({ name, phone, email, opposing_party: clip(body.opposing_party, 120), synopsis });
   return json({ ok: true, reply, schedule, note }, 200, cors);
 }
 
@@ -333,6 +335,7 @@ async function handleBook(request, env, cors) {
           `Email: ${lead.email || ""}`,
           `Other party: ${lead.opposing_party || ""}`,
           `Summary: ${lead.summary || ""}`,
+          `In their words: ${lead.synopsis || ""}`,
           `Lead #${lead.id}. It's on the calendar.`,
         ].join("\n"),
       })
@@ -395,6 +398,7 @@ async function saveLead(env, input, sid, sourcePage, origin = cleanSource(null, 
     matter_type: clip(input.matter_type, 60) || "other",
     summary: clip(input.summary, 500),
     opposing_party: clip(input.opposing_party, 120),
+    synopsis: clip(input.synopsis, 1500),
     urgent: input.urgent ? 1 : 0,
   };
   if (!lead.phone && !lead.email) return "Not saved: need a phone number or email first.";
@@ -409,19 +413,19 @@ async function saveLead(env, input, sid, sourcePage, origin = cleanSource(null, 
     id = existing.id;
     await env.DB.prepare(
       `UPDATE leads SET name=?, phone=?, email=?, matter_type=?, summary=?, opposing_party=?,
-       urgent=MAX(urgent, ?), existing_client=? WHERE id=?`
+       synopsis=COALESCE(?, synopsis), urgent=MAX(urgent, ?), existing_client=? WHERE id=?`
     )
       .bind(lead.name, lead.phone, lead.email, lead.matter_type, lead.summary, lead.opposing_party,
-        lead.urgent, lead.existing_client, id)
+        lead.synopsis, lead.urgent, lead.existing_client, id)
       .run();
   } else {
     const row = await env.DB.prepare(
-      `INSERT INTO leads (name, phone, email, matter_type, summary, opposing_party, urgent, existing_client,
+      `INSERT INTO leads (name, phone, email, matter_type, summary, opposing_party, synopsis, urgent, existing_client,
        routed_to, source_page, session_id, landing_page, referrer, utm_source, utm_medium, utm_campaign,
-       utm_term, utm_content, click_id, channel) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`
+       utm_term, utm_content, click_id, channel) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`
     )
       .bind(lead.name, lead.phone, lead.email, lead.matter_type, lead.summary, lead.opposing_party,
-        lead.urgent, lead.existing_client, null, sourcePage, sid, origin.landing_page, origin.referrer,
+        lead.synopsis, lead.urgent, lead.existing_client, null, sourcePage, sid, origin.landing_page, origin.referrer,
         origin.utm_source, origin.utm_medium, origin.utm_campaign, origin.utm_term, origin.utm_content,
         origin.click_id, origin.channel)
       .first();
@@ -441,6 +445,7 @@ async function saveLead(env, input, sid, sourcePage, origin = cleanSource(null, 
           `Matter: ${matterLabel(lead.matter_type)}`,
           `Other party: ${lead.opposing_party || ""}`,
           `Summary: ${lead.summary || ""}`,
+          `In their words: ${lead.synopsis || ""}`,
           `Urgent: ${lead.urgent ? "YES" : "no"}`,
           `Chat page: ${sourcePage || ""}`,
           `Came from: ${origin.channel}${origin.utm_campaign ? ` (${origin.utm_campaign})` : ""}`,

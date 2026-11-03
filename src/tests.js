@@ -125,7 +125,7 @@ async function runCase(env, c) {
     if (out.form && pendingForm) {
       const f = pendingForm;
       pendingForm = null;
-      const details = { name: "Test Visitor", phone: "210-555-0100", email: null, opposing_party: "Pat Example" };
+      const details = { name: "Test Visitor", phone: "210-555-0100", email: null, opposing_party: "Pat Example", synopsis: "We separated in June and need help with next steps." };
       savedMatter = f.matter_type;
       formSaves.push({ name: "save_lead", input: { ...f, ...details }, result: "Saved." });
       const schedule = f.matter_type === "uncontested_divorce";

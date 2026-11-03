@@ -63,6 +63,7 @@ export async function adminPage(env, url) {
   <div class="who">
     <p class="name">${esc(l.name || "No name")} ${tags}</p>
     ${l.summary ? `<p class="summary">${esc(l.summary)}</p>` : ""}
+    ${l.synopsis ? `<p class="meta">In their words: ${esc(l.synopsis)}</p>` : ""}
     ${l.opposing_party ? `<p class="meta">Other party: ${esc(l.opposing_party)}</p>` : ""}
     ${l.channel ? `<p class="meta">Came from ${esc(l.channel)}${l.utm_campaign ? ` (${esc(l.utm_campaign)})` : ""}${l.landing_page ? `, landed on ${esc(pathOf(l.landing_page))}` : ""}</p>` : ""}
     ${l.appt ? `<div class="appt-row"><p class="appt">Consultation: ${esc(fullLabel(Date.parse(l.appt)))}</p>
