@@ -446,8 +446,8 @@
   }
 
   var T = {
-    en: { synopsis: "Brief summary of your situation", synopsisHint: "A few sentences is enough. Please leave out account numbers and other sensitive details.", name: "Name", phone: "Phone", cell: "Cell phone", phoneOnly: "Consultations are by phone only.", next: "Next: pick your consultation time", email: "Email", other: "Other party's name (optional)", either: "Phone or email is required.", send: "Send my details", sending: "Sending...", fail: "Couldn't send. Please call (210) 571-0400." },
-    es: { synopsis: "Breve resumen de su situación", synopsisHint: "Unas pocas oraciones son suficientes. No incluya números de cuenta ni otros datos delicados.", name: "Nombre", phone: "Teléfono", cell: "Celular", phoneOnly: "Las consultas son solo por teléfono.", next: "Siguiente: elegir el horario de su consulta", email: "Correo electrónico", other: "Nombre de la otra parte (opcional)", either: "Se requiere teléfono o correo electrónico.", send: "Enviar mis datos", sending: "Enviando...", fail: "No se pudo enviar. Llame al (210) 571-0400." },
+    en: { synopsis: "Brief summary of your situation", synopsisHint: "A few sentences is enough. Please leave out account numbers and other sensitive details.", name: "Name", phone: "Phone", cell: "Cell phone", phoneOnly: "Consultations are by phone only.", next: "Next: pick your consultation time", email: "Email", emailOpt: "Email (optional)", other: "Other party's name (optional)", either: "Phone or email is required.", send: "Send my details", sending: "Sending...", fail: "Couldn't send. Please call (210) 571-0400." },
+    es: { synopsis: "Breve resumen de su situación", synopsisHint: "Unas pocas oraciones son suficientes. No incluya números de cuenta ni otros datos delicados.", name: "Nombre", phone: "Teléfono", cell: "Celular", phoneOnly: "Las consultas son solo por teléfono.", next: "Siguiente: elegir el horario de su consulta", email: "Correo electrónico", emailOpt: "Correo electrónico (opcional)", other: "Nombre de la otra parte (opcional)", either: "Se requiere teléfono o correo electrónico.", send: "Enviar mis datos", sending: "Enviando...", fail: "No se pudo enviar. Llame al (210) 571-0400." },
   };
 
   function field(name, label, type, auto, value) {
@@ -476,12 +476,14 @@
     card.className = "card";
     card.noValidate = true;
     card.appendChild(field("name", t.name, "text", "name", v.name));
-    card.appendChild(field("phone", f.phoneOnly ? t.cell : t.phone, "tel", "tel", v.phone));
-    card.appendChild(field("email", t.email, "email", "email", v.email));
     var hint = document.createElement("p");
     hint.className = "hint";
     hint.textContent = f.phoneOnly ? t.phoneOnly : t.either;
-    card.appendChild(hint);
+    card.appendChild(field("phone", f.phoneOnly ? t.cell : t.phone, "tel", "tel", v.phone));
+    // Phone-only note belongs with the cell field; the phone-or-email note goes after both.
+    if (f.phoneOnly) card.appendChild(hint);
+    card.appendChild(field("email", f.phoneOnly ? t.emailOpt : t.email, "email", "email", v.email));
+    if (!f.phoneOnly) card.appendChild(hint);
     card.appendChild(field("opposing_party", t.other, "text", "off", v.opposing_party));
     var sl = document.createElement("label");
     sl.textContent = t.synopsis;
