@@ -446,8 +446,8 @@
   }
 
   var T = {
-    en: { synopsis: "Brief summary of your situation", synopsisHint: "A few sentences is enough. Please leave out account numbers and other sensitive details.", name: "Name", phone: "Phone", cell: "Cell phone", phoneOnly: "Consultations are by phone only.", email: "Email", other: "Other party's name (optional)", either: "Phone or email is required.", send: "Send my details", sending: "Sending...", fail: "Couldn't send. Please call (210) 571-0400." },
-    es: { synopsis: "Breve resumen de su situación", synopsisHint: "Unas pocas oraciones son suficientes. No incluya números de cuenta ni otros datos delicados.", name: "Nombre", phone: "Teléfono", cell: "Celular", phoneOnly: "Las consultas son solo por teléfono.", email: "Correo electrónico", other: "Nombre de la otra parte (opcional)", either: "Se requiere teléfono o correo electrónico.", send: "Enviar mis datos", sending: "Enviando...", fail: "No se pudo enviar. Llame al (210) 571-0400." },
+    en: { synopsis: "Brief summary of your situation", synopsisHint: "A few sentences is enough. Please leave out account numbers and other sensitive details.", name: "Name", phone: "Phone", cell: "Cell phone", phoneOnly: "Consultations are by phone only.", next: "Next: pick your consultation time", email: "Email", other: "Other party's name (optional)", either: "Phone or email is required.", send: "Send my details", sending: "Sending...", fail: "Couldn't send. Please call (210) 571-0400." },
+    es: { synopsis: "Breve resumen de su situación", synopsisHint: "Unas pocas oraciones son suficientes. No incluya números de cuenta ni otros datos delicados.", name: "Nombre", phone: "Teléfono", cell: "Celular", phoneOnly: "Las consultas son solo por teléfono.", next: "Siguiente: elegir el horario de su consulta", email: "Correo electrónico", other: "Nombre de la otra parte (opcional)", either: "Se requiere teléfono o correo electrónico.", send: "Enviar mis datos", sending: "Enviando...", fail: "No se pudo enviar. Llame al (210) 571-0400." },
   };
 
   function field(name, label, type, auto, value) {
@@ -503,7 +503,7 @@
     var b = document.createElement("button");
     b.type = "submit";
     b.className = "primary";
-    b.textContent = t.send;
+    b.textContent = f.phoneOnly ? t.next : t.send;
     card.appendChild(b);
     var note = msg("", "err");
     card.appendChild(note);
@@ -567,7 +567,7 @@
             return;
           }
           b.disabled = false;
-          b.textContent = t.send;
+          b.textContent = f.phoneOnly ? t.next : t.send;
           if (d.errors) {
             Object.keys(d.errors).forEach(function (k) {
               var el = card.elements[k];
@@ -584,7 +584,7 @@
         .catch(function () {
           busy = false;
           b.disabled = false;
-          b.textContent = t.send;
+          b.textContent = f.phoneOnly ? t.next : t.send;
           note.textContent = t.fail;
         });
     });
