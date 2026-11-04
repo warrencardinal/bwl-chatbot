@@ -153,6 +153,20 @@ export async function availabilityPage(env, url) {
     }
   }
 
+  let lastErr = "";
+  const errRow = await env.DB.prepare("SELECT value FROM settings WHERE key = 'last_booking_error'").first();
+  if (errRow) {
+    let e = {};
+    try {
+      e = JSON.parse(errRow.value);
+    } catch {}
+    const plain = /writer access|forbidden|403|requiredAccessLevel/i.test(e.message || "")
+      ? "Google won't let the chat add events. The calendar has to be shared with \"Make changes to events\"."
+      : e.message;
+    const when = e.at ? new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(e.at)) : "";
+    lastErr = `<div class="kv"><span>Last booking failed${when ? `, ${esc(when)}` : ""}</span><span class="dot bad">${esc(plain)}</span></div>`;
+  }
+
   const order = [1, 2, 3, 4, 5, 6, 0];
   const week = order
     .map((i) => {
@@ -214,6 +228,7 @@ ${flash(url)}
   <h2>Status</h2>
   ${state}
   ${next}
+  ${lastErr}
   ${sa ? `<div class="kv"><span>Calendar access email</span><code>${esc(sa)}</code></div>` : ""}
 </div></aside>
 </div>`
