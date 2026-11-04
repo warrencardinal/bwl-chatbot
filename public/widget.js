@@ -251,6 +251,7 @@
             loadSlots(d.error);
           } else {
             box.appendChild(msg(d.error || "Couldn't book. Please call (210) 571-0400.", "err"));
+            if (d.detail) box.appendChild(msg(d.detail, "err"));
             yes.textContent = "Book this time";
             yes.disabled = false;
             other.disabled = false;

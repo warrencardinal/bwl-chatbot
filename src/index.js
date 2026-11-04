@@ -311,8 +311,31 @@ async function handleBook(request, env, cors) {
   if (check !== "ok") return json({ error: "Scheduling isn't available for this chat.", state: check }, 403, cors);
 
   const lead = await env.DB.prepare("SELECT * FROM leads WHERE session_id = ?").bind(session.sid).first();
-  const result = await bookSlot(env, settings, { lead, sid: session.sid, startIso: body.start });
+  let result;
+  try {
+    result = await bookSlot(env, settings, { lead, sid: session.sid, startIso: body.start });
+  } catch (err) {
+    // Keep the real reason where the admin can see it, and tell the visitor how to still get scheduled.
+    const message = String(err && err.message ? err.message : err).slice(0, 500);
+    console.error("Booking failed", message);
+    await env.DB.prepare(
+      "INSERT INTO settings (key, value) VALUES ('last_booking_error', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+      .bind(JSON.stringify({ at: new Date().toISOString(), lead: lead?.id || null, start: body.start || null, message }))
+      .run()
+      .catch(() => {});
+    if (lead) {
+      await env.DB.prepare("UPDATE leads SET summary = TRIM(COALESCE(summary, '') || ' (Tried to book online, booking failed.)') WHERE id = ?")
+        .bind(lead.id)
+        .run()
+        .catch(() => {});
+    }
+    const out = { error: "We couldn't book that time online. Please call (210) 571-0400 and the firm will get you scheduled." };
+    if (request.headers.get("Origin") === new URL(request.url).origin) out.detail = message;
+    return json(out, 502, cors);
+  }
   if (!result.ok) return json(result, 409, cors);
+  await env.DB.prepare("DELETE FROM settings WHERE key = 'last_booking_error'").run().catch(() => {});
 
   const note = (settings.confirmation_note || "").trim();
   const message =
